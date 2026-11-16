@@ -1,0 +1,26 @@
+[project]
+name = "ai-debate"
+version = "0.1.0"
+description = "Symulacja debaty psy vs koty: prowadzący (LLM) i dwóch debatantów (Bielik)"
+requires-python = ">=3.12"
+
+[tool.uv.workspace]
+members = ["packages/debate-core", "packages/debate-api"]
+# infra/vllm to osobny projekt z własnym środowiskiem (vLLM przypina własne torch)
+exclude = ["infra/*"]
+
+[tool.uv.sources]
+debate-core = { workspace = true }
+debate-api = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.2.0",
+    "pytest-asyncio>=1.5.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["packages/debate-core/tests", "packages/debate-api/tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"

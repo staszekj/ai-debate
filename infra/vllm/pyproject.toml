@@ -1,0 +1,9 @@
+[project]
+name = "ai-debate-vllm"
+version = "0.1.0"
+description = "Środowisko serwera vLLM dla debatantów (Bielik), oddzielone od workspace"
+requires-python = ">=3.12,<3.13"
+dependencies = ["vllm==0.33.0"]
+
+[tool.uv]
+package = false

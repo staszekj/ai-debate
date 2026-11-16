@@ -1,0 +1,20 @@
+{
+  "title": "Psy czy koty: kto jest lepszym towarzyszem człowieka?",
+  "blocks": [
+    {
+      "topic": "Więź emocjonalna człowiek–zwierzę",
+      "guidance": "Przywiązanie, okazywanie uczuć, wsparcie w samotności i w trudnych chwilach."
+    },
+    {
+      "topic": "Obowiązki człowieka wobec zwierzęcia",
+      "guidance": "Czas, spacery, wychowanie, opieka podczas wyjazdów, życie w mieście i w bloku."
+    },
+    {
+      "topic": "Koszty weterynaryjne",
+      "guidance": "Profilaktyka, szczepienia, typowe choroby, leczenie na starość, ubezpieczenie."
+    }
+  ],
+  "ad_vocem": { "enabled": true, "max_sentences": 3 },
+  "closing_statement": { "enabled": true, "words": 100 },
+  "host_summary": true
+}
