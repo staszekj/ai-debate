@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from starlette.testclient import WebSocketTestSession
 
 from debate_api.app import create_app
+from debate_api.sessions import Session
 from debate_core.director import DirectorChannel
 from debate_core.script import load_preset
 from debate_core.testing import Decider, make_deps
@@ -77,7 +78,52 @@ def test_ws_streams_full_debate_with_history(client: TestClient) -> None:
 
     # drugi klient po zakończeniu dostaje całą historię
     with client.websocket_connect(f"/ws/sessions/{session['session_id']}") as ws:
-        assert read_until_end(ws) == events
+        replay = read_until_end(ws)
+    assert [e for e in replay if not e["type"].startswith("model_")] == [
+        e for e in events if not e["type"].startswith("model_")
+    ]
+
+
+def test_model_snapshots_and_reconnect() -> None:
+    session = Session(id="test", script=load_preset("psy-vs-koty"), director=DirectorChannel())
+    session.publish({"type": "status", "status": "running"})
+    first = {"type": "model_start", "id": "one", "model": "dogs", "step": "answer", "messages": []}
+    chunk = {"type": "model_chunk", "id": "one", "model": "dogs", "chunk": {"content": "  tekst "}}
+    session.publish(first)
+    session.publish(chunk)
+    queue = session.subscribe()
+    assert [queue.get_nowait() for _ in range(3)] == [session.events[0], first, chunk]
+    next_chunk = {"type": "model_chunk", "id": "one", "model": "dogs", "chunk": {"content": "dalej"}}
+    session.publish(next_chunk)
+    assert queue.get_nowait() == next_chunk
+    session.publish({"type": "model_end", "id": "one", "model": "dogs", "status": "done", "retain": False})
+    assert not session._model_calls
+
+    start = {"type": "model_start", "id": "two", "model": "host", "step": "decide", "messages": []}
+    result = {"type": "model_result", "id": "two", "model": "host", "parsed": {"block_exhausted": True}}
+    end = {"type": "model_end", "id": "two", "model": "host", "status": "done", "retain": True}
+    for event in (start, result, end):
+        session.publish(event)
+    session.publish({"type": "status", "status": "done"})
+    replay = session.subscribe()
+    assert [replay.get_nowait() for _ in range(6)] == [session.events[0], start, result, end, session.events[-1], None]
+    assert all(not e["type"].startswith("model_") for e in session.events)
+    next_start = {"type": "model_start", "id": "three", "model": "host", "step": "summary", "messages": []}
+    session.publish(next_start)
+    assert session._model_calls["host"] == [next_start]
+
+
+def test_session_error_clears_active_model_call() -> None:
+    session = Session(id="test", script=load_preset("psy-vs-koty"), director=DirectorChannel())
+    session.publish({"type": "model_start", "id": "one", "model": "cats", "step": "answer", "messages": []})
+    queue = session.subscribe()
+    queue.get_nowait()
+    session.publish({"type": "status", "status": "error", "message": "błąd"})
+    assert queue.get_nowait() == {
+        "type": "model_end", "id": "one", "model": "cats", "status": "error", "retain": False
+    }
+    assert queue.get_nowait()["status"] == "error"
+    assert not session._model_calls
 
 
 def test_ws_director_commands() -> None:

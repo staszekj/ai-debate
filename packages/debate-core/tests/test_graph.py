@@ -6,13 +6,15 @@ import asyncio
 from typing import Any
 
 import pytest
+from langchain_core.messages import AIMessageChunk
+from langchain_core.outputs import ChatGenerationChunk
 
 from debate_core.director import DirectorChannel
 from debate_core.graph import DebateDeps, build_graph, run_config
 from debate_core.script import Block, ClosingStatement, DebateScript, load_preset
 from debate_core.state import ExtraQuestion, Note, Reprimand, Turn, initial_state
 
-from debate_core.testing import Decider, default_debater, default_host, last_text, make_deps
+from debate_core.testing import Decider, ScriptedChatModel, default_debater, default_host, last_text, make_deps
 
 
 def script(blocks: int = 2, qmin: int = 2, qtarget: int = 3, qmax: int = 4, **kwargs: Any) -> DebateScript:
@@ -124,6 +126,61 @@ async def test_questions_are_followed_by_direct_answers() -> None:
     ends = [e for e in events if e["type"] == "turn_end" and e["kind"] == "ad_vocem"]
     assert not ends
     assert all("passed" not in e for e in events if e["type"] == "turn_end")
+
+
+async def test_model_diagnostics_capture_messages_and_untrimmed_output() -> None:
+    deps = make_deps(debater=lambda _: "  Pełne zdanie. Urwana końcówka  ", decider=Decider(False))
+    final, events = await run(script(blocks=1, qmin=2, qtarget=2, qmax=2), deps)
+    starts = [event for event in events if event["type"] == "model_start"]
+    for model, fake in [("host", deps.host), *deps.debaters.items()]:
+        calls = [e for e in starts if e["model"] == model and e["step"] != "decide"]
+        assert [e["messages"] for e in calls] == [
+            [message.model_dump(mode="json") for message in messages] for messages in fake.calls
+        ]
+    decision_start = next(e for e in starts if e["step"] == "decide")
+    assert decision_start["messages"] == [m.model_dump(mode="json") for m in deps.decide.calls[0]]
+    assert "block_exhausted" in decision_start["response_schema"]["properties"]
+    assert next(e["parsed"] for e in events if e["type"] == "model_result") == {
+        "block_exhausted": False, "next_question": "Następne pytanie?"
+    }
+    answer_start = next(e for e in starts if e["step"] == "answer")
+    chunks = [e["chunk"]["content"] for e in events if e["type"] == "model_chunk" and e["id"] == answer_start["id"]]
+    assert "".join(chunks) == "  Pełne zdanie. Urwana końcówka  "
+    assert next(t.text for t in final["transcript"] if t.kind == "answer") == "Pełne zdanie."
+    assert all(
+        sum(e["type"] == "model_end" and e["id"] == start["id"] for e in events) == 1 for start in starts
+    )
+    question_starts = [e for e in starts if e["model"] == "host" and e["step"] == "question"]
+    assert len(question_starts) == 1  # drugie pytanie pochodzi z decyzji
+
+
+async def test_model_diagnostics_preserve_nontext_blocks() -> None:
+    class BlockModel(ScriptedChatModel):
+        def _stream(self, messages: Any, stop: Any = None, run_manager: Any = None, **kwargs: Any) -> Any:
+            yield ChatGenerationChunk(message=AIMessageChunk(content=[
+                {"type": "reasoning", "reasoning": "Udostępniony blok"},
+                {"type": "text", "text": "Odpowiedź."},
+            ]))
+
+    deps = make_deps()
+    deps.debaters["dogs"] = BlockModel(respond=default_debater)
+    _, events = await run(script(blocks=1, qmin=1, qtarget=1, qmax=1), deps)
+    start = next(e for e in events if e["type"] == "model_start" and e["model"] == "dogs")
+    chunk = next(e["chunk"] for e in events if e["type"] == "model_chunk" and e["id"] == start["id"])
+    assert chunk["content"] == [
+        {"type": "reasoning", "reasoning": "Udostępniony blok"},
+        {"type": "text", "text": "Odpowiedź."},
+    ]
+
+
+async def test_decider_error_remains_a_failure() -> None:
+    async def fail(_: Any) -> Any:
+        raise ValueError("nieprawidłowa decyzja")
+
+    deps = make_deps()
+    deps.decide = fail
+    with pytest.raises(ValueError, match="nieprawidłowa decyzja"):
+        await run(script(blocks=1, qmin=2, qtarget=2, qmax=2), deps)
 
 
 async def test_closing_statements_reverse_order_and_length() -> None:

@@ -10,8 +10,8 @@ import {
 } from "@chatscope/chat-ui-kit-react";
 
 import { DirectorPanel } from "./DirectorPanel";
-import type { DebateScript, DirectorCommand, Speaker, TurnKind } from "./types";
-import { type ChatItem, isFinished, useDebate } from "./useDebate";
+import type { DebateScript, DirectorCommand, JsonValue, ModelChunk, Speaker, TurnKind } from "./types";
+import { type ChatItem, type ModelCall, isFinished, useDebate } from "./useDebate";
 
 const SPEAKER: Record<Speaker, { name: string; emoji: string }> = {
   host: { name: "Prowadzący", emoji: "🎙️" },
@@ -84,6 +84,59 @@ function renderItem(item: ChatItem) {
   );
 }
 
+function displayValue(value: JsonValue): string {
+  return typeof value === "string" ? value : JSON.stringify(value, null, 2);
+}
+
+function chunkText(chunk: ModelChunk): string {
+  let text = displayValue(chunk.content);
+  if (chunk.additional_kwargs && Object.keys(chunk.additional_kwargs).length)
+    text += `\n[additional_kwargs]\n${displayValue(chunk.additional_kwargs)}\n`;
+  if (Array.isArray(chunk.tool_call_chunks) && chunk.tool_call_chunks.length)
+    text += `\n[tool_call_chunks]\n${displayValue(chunk.tool_call_chunks)}\n`;
+  return text;
+}
+
+function ModelPanel({ title, call }: { title: string; call: ModelCall | null }) {
+  return (
+    <section className="model-panel" aria-label={title}>
+      <h3>{title}</h3>
+      {call ? (
+        <div className="model-panel__body">
+          <div className="model-panel__status">{call.step} · {call.finished ? "zakończono" : "generowanie"}</div>
+          <div className="model-panel__input">
+            <strong>Wejście</strong>
+            {call.messages.map((message, index) => {
+              const { type, content, ...extra } = message;
+              return (
+                <div key={index}>
+                  <strong>{type}</strong>
+                  <pre>{displayValue(content)}</pre>
+                  {Object.values(extra).some((value) => value !== null && value !== "" &&
+                    !(Array.isArray(value) && value.length === 0) &&
+                    !(typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 0)) && (
+                    <pre>{JSON.stringify(extra, null, 2)}</pre>
+                  )}
+                </div>
+              );
+            })}
+            {call.responseSchema && (
+              <>
+                <strong>Schemat odpowiedzi</strong>
+                <pre>{displayValue(call.responseSchema)}</pre>
+              </>
+            )}
+          </div>
+          <div className="model-panel__output">
+            <strong>{call.parsed !== undefined ? "Wynik sparsowany" : "Odpowiedź modelu"}</strong>
+            <pre>{call.parsed !== undefined ? displayValue(call.parsed) : call.chunks.map(chunkText).join("")}</pre>
+          </div>
+        </div>
+      ) : <p className="model-panel__empty">Brak aktywnego wywołania.</p>}
+    </section>
+  );
+}
+
 export function DebateView({ sessionId, script, onBack }: { sessionId: string; script: DebateScript; onBack: () => void }) {
   const { state, director } = useDebate(sessionId, script);
   const finished = isFinished(state.status);
@@ -131,6 +184,11 @@ export function DebateView({ sessionId, script, onBack }: { sessionId: string; s
         {state.error && <p className="error">{state.error}</p>}
       </div>
       <DirectorPanel director={director} status={state.status} disabled={finished || !state.connected} />
+      <div className="model-panels">
+        <ModelPanel title="LLM · Prowadzący" call={state.models.host} />
+        <ModelPanel title="SLM · Psy" call={state.models.dogs} />
+        <ModelPanel title="SLM · Koty" call={state.models.cats} />
+      </div>
     </div>
   );
 }

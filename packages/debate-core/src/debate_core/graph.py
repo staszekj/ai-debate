@@ -11,6 +11,8 @@ Zdarzenia dla UI / CLI idą przez `get_stream_writer()` (stream_mode="custom"):
 
 from __future__ import annotations
 
+import asyncio
+import uuid
 from dataclasses import dataclass
 from typing import Any
 
@@ -24,7 +26,7 @@ from langgraph.graph.state import CompiledStateGraph
 
 from debate_core import prompts
 from debate_core.director import DirectorChannel
-from debate_core.llms import Decider
+from debate_core.llms import Decider, HostDecision
 from debate_core.state import (
     DebateState,
     ExtraQuestion,
@@ -58,17 +60,47 @@ def _emit(event: dict[str, Any]) -> None:
     get_stream_writer()(event)
 
 
+def _model_start(speaker: Speaker, step: str, messages: list[BaseMessage], *, decision: bool = False) -> str:
+    call_id = uuid.uuid4().hex
+    event: dict[str, Any] = {
+        "type": "model_start",
+        "id": call_id,
+        "model": speaker,
+        "step": step,
+        "messages": [message.model_dump(mode="json") for message in messages],
+    }
+    if decision:
+        event["response_schema"] = HostDecision.model_json_schema()
+    _emit(event)
+    return call_id
+
+
+def _model_end(call_id: str, speaker: Speaker, status: str, *, retain: bool = False) -> None:
+    _emit({"type": "model_end", "id": call_id, "model": speaker, "status": status, "retain": retain})
+
+
 async def _say(
     model: BaseChatModel, messages: list[BaseMessage], speaker: Speaker, kind: TurnKind, block_idx: int | None
 ) -> str:
     """Generuje wypowiedź ze streamingiem tokenów do UI."""
     _emit({"type": "turn_start", "speaker": speaker, "kind": kind, "block_idx": block_idx})
     parts: list[str] = []
-    async for chunk in model.astream(messages):
-        text = chunk.text if parts else chunk.text.lstrip()
-        if text:
-            parts.append(text)
-            _emit({"type": "token", "text": text})
+    call_id = _model_start(speaker, kind, messages)
+    try:
+        async for chunk in model.astream(messages):
+            raw = chunk.model_dump(mode="json", include={"content", "additional_kwargs", "tool_call_chunks"})
+            _emit({"type": "model_chunk", "id": call_id, "model": speaker, "chunk": raw})
+            text = chunk.text if parts else chunk.text.lstrip()
+            if text:
+                parts.append(text)
+                _emit({"type": "token", "text": text})
+    except asyncio.CancelledError:
+        _model_end(call_id, speaker, "cancelled")
+        raise
+    except Exception:
+        _model_end(call_id, speaker, "error")
+        raise
+    _model_end(call_id, speaker, "done")
     return "".join(parts).strip()
 
 
@@ -222,7 +254,18 @@ def build_graph(deps: DebateDeps, checkpointer: BaseCheckpointSaver | None = Non
         must_continue = asked < block.questions_min
         first = _answer_order(state["questions_total"])[0]
         instruction = prompts.host_decide(state["script"], state["block_idx"], asked, must_continue, first)
-        decision = await decide(prompts.host_messages(state, instruction))
+        messages = prompts.host_messages(state, instruction)
+        call_id = _model_start("host", "decide", messages, decision=True)
+        try:
+            decision = await decide(messages)
+        except asyncio.CancelledError:
+            _model_end(call_id, "host", "cancelled")
+            raise
+        except Exception:
+            _model_end(call_id, "host", "error")
+            raise
+        _emit({"type": "model_result", "id": call_id, "model": "host", "parsed": decision.model_dump(mode="json")})
+        _model_end(call_id, "host", "done", retain=True)
         exhausted = decision.block_exhausted and not must_continue
         _emit({"type": "decision", "block_exhausted": exhausted, "next_question": decision.next_question})
         if exhausted:

@@ -7,6 +7,9 @@ import type {
   DebateEvent,
   DebateScript,
   DirectorCommand,
+  JsonValue,
+  ModelChunk,
+  ModelMessage,
   Phase,
   SessionStatus,
   Speaker,
@@ -34,6 +37,17 @@ export interface DebateState {
   speaking: { speaker: Speaker; kind: TurnKind } | null;
   connected: boolean;
   error: string | null;
+  models: Record<Speaker, ModelCall | null>;
+}
+
+export interface ModelCall {
+  id: string;
+  step: string;
+  messages: ModelMessage[];
+  responseSchema?: JsonValue;
+  chunks: ModelChunk[];
+  parsed?: JsonValue;
+  finished: boolean;
 }
 
 const initial: DebateState = {
@@ -45,6 +59,7 @@ const initial: DebateState = {
   speaking: null,
   connected: false,
   error: null,
+  models: { host: null, dogs: null, cats: null },
 };
 
 type Action = { type: "event"; event: DebateEvent } | { type: "reset" } | { type: "connected"; value: boolean };
@@ -52,6 +67,36 @@ type Action = { type: "event"; event: DebateEvent } | { type: "reset" } | { type
 export function reduceEvent(state: DebateState, event: DebateEvent, script: DebateScript): DebateState {
   const n = state.items.length;
   switch (event.type) {
+    case "model_start":
+      return {
+        ...state,
+        models: {
+          ...state.models,
+          [event.model]: {
+            id: event.id,
+            step: event.step,
+            messages: event.messages,
+            responseSchema: event.response_schema,
+            chunks: [],
+            finished: false,
+          },
+        },
+      };
+    case "model_chunk":
+    case "model_result":
+    case "model_end": {
+      const call = state.models[event.model];
+      if (!call || call.id !== event.id) return state;
+      const updated =
+        event.type === "model_chunk"
+          ? { ...call, chunks: [...call.chunks, event.chunk] }
+          : event.type === "model_result"
+            ? { ...call, parsed: event.parsed }
+            : event.retain
+              ? { ...call, finished: true }
+              : null;
+      return { ...state, models: { ...state.models, [event.model]: updated } };
+    }
     case "turn_start": {
       const items = [...state.items];
       let { blockIdx, questionNo } = state;

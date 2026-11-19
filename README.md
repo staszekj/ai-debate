@@ -44,6 +44,10 @@ pnpm --filter director-web build
 pnpm --filter director-web start    # http://127.0.0.1:3000
 ```
 
+W widoku debaty trzy panele pokazują pełne wiadomości wejściowe modeli i dostępne fragmenty ich odpowiedzi. Wypowiedzi są wyświetlane podczas generowania, a następnie znikają; decyzja prowadzącego jest pokazywana jako wynik sparsowany do kolejnego wywołania. Dostawca nie musi udostępniać wszystkich tokenów ani wewnętrznego rozumowania.
+
+Prompty mogą zawierać treść debaty i notatki reżysera. Są dostępne każdemu klientowi podłączonemu do WebSocketu danej sesji; przechowywana jest tylko bieżąca diagnostyka, nie pełna historia promptów.
+
 ### Debata w terminalu (bez aplikacji webowej)
 
 ```bash
@@ -75,6 +79,7 @@ Inny dostawca prowadzącego wymaga dodatku, np. `uv sync --all-packages --extra 
 ```bash
 uv run pytest                               # graf, router, interwencje, API (fake modele)
 pnpm --filter director-web typecheck        # TypeScript: klient i serwer
+pnpm --filter director-web test             # stan paneli diagnostycznych
 pnpm --filter director-web build
 ```
 

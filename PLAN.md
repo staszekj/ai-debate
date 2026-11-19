@@ -186,6 +186,7 @@ Zdarzenia (`turn_start`, `token`, `turn_end`, `phase`, `director_ack`, `decision
 ## Aplikacja reżysera (`director-web`)
 - **Edytor schematu**: wybór presetu, edycja tytułu, dodawanie, usuwanie i zmiana kolejności bloków (temat, wskazówki, liczba pytań), ustawienia mowy końcowej, przycisk „Start”.
 - **Widok debaty**: `MainContainer` / `ChatContainer` / `MessageList` z chatscope. Prowadzący, psy i koty mają różne avatary i nazwy, a separatory (`MessageSeparator`) oznaczają bloki. Tokeny dopisują się na żywo, a podczas generowania widać `TypingIndicator`. Pasek postępu pokazuje bieżący blok i numer pytania.
+- **Panele modeli**: trzy stale widoczne panele pokazują pełne wiadomości wejściowe i dostępne fragmenty odpowiedzi każdego modelu. Po zakończeniu wypowiedzi panel się czyści; sparsowany wynik decyzji prowadzącego pozostaje do jego następnego wywołania. Diagnostyka jest dostępna klientom WebSocket sesji, ale nie jest zapisywana w historii promptów.
 - **Panel reżysera**: przyciski „Upomnij psy” / „Upomnij koty” (z powodem), „Dodatkowe pytanie” (z adresatem), notatka dla prowadzącego, Pauza / Wznów / Stop. Interwencje widać w czacie jako wiadomości reżysera do prowadzącego, ze statusem „oczekuje” / „zrealizowano”.
 - Uruchomienie: `pnpm --filter director-web dev` (Vite na :5173 z proxy do API) lub `build` + `start` (Express na :3000, uruchamiany przez Node bez kompilacji, type stripping).
 

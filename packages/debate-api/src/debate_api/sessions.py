@@ -1,8 +1,7 @@
 """Sesje debaty: `thread_id` → zadanie grafu + `DirectorChannel` + historia zdarzeń.
 
-Każde zdarzenie z grafu trafia do historii sesji i do kolejek podłączonych
-klientów. Klient, który podłączy się później (albo po zerwaniu połączenia),
-najpierw dostaje całą historię, więc nie traci początku debaty.
+Zdarzenia debaty trafiają do historii, a diagnostyka modeli do bieżących
+migawek. Klient po połączeniu dostaje migawki i historię debaty.
 """
 
 from __future__ import annotations
@@ -46,20 +45,45 @@ class Session:
     phase: str = "opening"
     task: asyncio.Task[None] | None = None
     _subscribers: set[asyncio.Queue[Event | None]] = field(default_factory=set)
+    _model_calls: dict[str, list[Event]] = field(default_factory=dict)
 
     def publish(self, event: Event) -> None:
+        event_type = event.get("type")
+        if event_type == "model_start":
+            self._model_calls[event["model"]] = [event]
+        elif event_type in ("model_chunk", "model_result", "model_end"):
+            call = self._model_calls.get(event["model"])
+            if not call or call[0]["id"] != event["id"]:
+                raise ValueError("zdarzenie diagnostyczne nie pasuje do aktywnego wywołania")
+            if event_type == "model_end" and not event["retain"]:
+                del self._model_calls[event["model"]]
+            else:
+                call.append(event)
+        else:
+            if event_type == "status" and event["status"] in ("done", "stopped", "error"):
+                self._end_active_calls("error" if event["status"] == "error" else "cancelled")
+            self.events.append(event)
         if event.get("type") == "phase":
             self.phase = event["phase"]
         if event.get("type") == "status":
             self.status = event["status"]
-        self.events.append(event)
         for q in self._subscribers:
             q.put_nowait(event)
+
+    def _end_active_calls(self, status: str) -> None:
+        for model, events in list(self._model_calls.items()):
+            if events[-1]["type"] != "model_end":
+                self.publish({"type": "model_end", "id": events[0]["id"], "model": model, "status": status, "retain": False})
 
     def subscribe(self) -> asyncio.Queue[Event | None]:
         """Kolejka z dotychczasową historią i kolejnymi zdarzeniami; `None` = koniec sesji."""
         q: asyncio.Queue[Event | None] = asyncio.Queue()
-        for event in self.events:
+        if self.events:
+            q.put_nowait(self.events[0])
+        for events in self._model_calls.values():
+            for event in events:
+                q.put_nowait(event)
+        for event in self.events[1:]:
             q.put_nowait(event)
         if self.finished:
             q.put_nowait(None)
@@ -90,6 +114,7 @@ class Session:
             log.exception("sesja %s zakończona błędem", self.id)
             self.publish({"type": "status", "status": "error", "message": f"{type(e).__name__}: {e}"})
         finally:
+            self._end_active_calls("cancelled")
             self._close()
 
 

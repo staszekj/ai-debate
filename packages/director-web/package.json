@@ -8,7 +8,8 @@
     "dev": "vite",
     "build": "vite build",
     "start": "node server/index.ts",
-    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.server.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.server.json",
+    "test": "node --test client/tests/*.test.mjs"
   },
   "dependencies": {
     "@chatscope/chat-ui-kit-react": "^2.1.1",
