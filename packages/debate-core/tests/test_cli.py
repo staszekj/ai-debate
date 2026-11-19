@@ -1,6 +1,6 @@
 import pytest
 
-from debate_core.cli import parse_director_command, transcript_markdown
+from debate_core.cli import TerminalPrinter, parse_director_command, transcript_markdown
 from debate_core.director import DirectorChannel
 from debate_core.script import load_preset
 from debate_core.state import ExtraQuestion, Note, Reprimand, Turn
@@ -50,11 +50,21 @@ def test_transcript_markdown() -> None:
         script,
         [
             Turn(speaker="host", kind="block_intro", text="Blok pierwszy.", block_idx=0),
-            Turn(speaker="cats", kind="ad_vocem", text="", block_idx=0, passed=True),
+            Turn(speaker="cats", kind="answer", text="Kocia odpowiedź.", block_idx=0),
             Turn(speaker="dogs", kind="closing_statement", text="Pies!"),
             Turn(speaker="cats", kind="closing_statement", text="Kot!"),
         ],
     )
     assert "## Blok 1: Więź emocjonalna człowiek–zwierzę" in md
-    assert "**Koty (ad vocem):** _(pomija)_" in md
+    assert "**Koty:** Kocia odpowiedź." in md
     assert md.count("## Mowy końcowe") == 1
+
+
+def test_terminal_printer_streams_answer(capsys: pytest.CaptureFixture[str]) -> None:
+    printer = TerminalPrinter(load_preset("psy-vs-koty"), color=False)
+    printer.handle({"type": "turn_start", "speaker": "dogs", "kind": "answer", "block_idx": 0})
+    printer.handle({"type": "token", "text": "Nasz "})
+    assert capsys.readouterr().out == "\nPsy: Nasz "
+    printer.handle({"type": "token", "text": "argument."})
+    printer.handle({"type": "turn_end"})
+    assert capsys.readouterr().out == "argument.\n"

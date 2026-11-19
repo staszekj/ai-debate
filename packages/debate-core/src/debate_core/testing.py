@@ -49,8 +49,6 @@ def default_host(messages: list[BaseMessage]) -> str:
 
 
 def default_debater(messages: list[BaseMessage]) -> str:
-    if "PASS" in last_text(messages):
-        return "Krótkie ad vocem."
     return "Nasz argument."
 
 

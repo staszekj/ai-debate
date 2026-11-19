@@ -164,21 +164,6 @@ export function ScriptEditor({ onStarted }: { onStarted: (session: SessionInfo) 
           <label className="field field--check">
             <input
               type="checkbox"
-              checked={script.ad_vocem.enabled}
-              onChange={(e) => update({ ad_vocem: { ...script.ad_vocem, enabled: e.target.checked } })}
-            />
-            <span>Ad vocem</span>
-          </label>
-          <NumberField
-            label="maks. zdań"
-            value={script.ad_vocem.max_sentences}
-            onChange={(v) => update({ ad_vocem: { ...script.ad_vocem, max_sentences: v } })}
-          />
-        </div>
-        <div className="row">
-          <label className="field field--check">
-            <input
-              type="checkbox"
               checked={script.closing_statement.enabled}
               onChange={(e) =>
                 update({ closing_statement: { ...script.closing_statement, enabled: e.target.checked } })

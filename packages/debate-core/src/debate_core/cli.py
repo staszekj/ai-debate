@@ -112,7 +112,7 @@ HELP = """Komendy reżysera (wpisz i naciśnij Enter):
 
 SIDE_ALIASES: dict[str, Side] = {"psy": "dogs", "pies": "dogs", "dogs": "dogs", "koty": "cats", "kot": "cats", "cats": "cats"}
 COLORS = {"host": "\033[1m", "dogs": "\033[33m", "cats": "\033[36m", "dim": "\033[2m", "reset": "\033[0m"}
-KIND_SUFFIX = {"ad_vocem": " (ad vocem)", "closing_statement": " (mowa końcowa)", "reprimand": " (upomnienie)"}
+KIND_SUFFIX = {"closing_statement": " (mowa końcowa)", "reprimand": " (upomnienie)"}
 
 
 def parse_director_command(line: str, director: DirectorChannel) -> str:
@@ -158,7 +158,6 @@ class TerminalPrinter:
     def __init__(self, script: DebateScript, color: bool) -> None:
         self.script = script
         self.color = color
-        self.buffer_ad_vocem = False
 
     def c(self, key: str, text: str) -> str:
         return f"{COLORS[key]}{text}{COLORS['reset']}" if self.color else text
@@ -174,13 +173,9 @@ class TerminalPrinter:
                 print(self.c("host", f"\n=== Blok {idx + 1}/{len(self.script.blocks)}: {self.script.blocks[idx].topic} ==="))
             label = SPEAKER_LABEL[e["speaker"]] + KIND_SUFFIX.get(kind, "")
             print("\n" + self.c(e["speaker"], label + ":"), end=" ", flush=True)
-            # ad vocem buforujemy, żeby zamiast „PASS” pokazać czytelną informację
-            self.buffer_ad_vocem = kind == "ad_vocem"
-        elif e["type"] == "token" and not self.buffer_ad_vocem:
+        elif e["type"] == "token":
             print(e["text"], end="", flush=True)
         elif e["type"] == "turn_end":
-            if self.buffer_ad_vocem:
-                print(self.c("dim", "(pomija)") if e["passed"] else e["text"], end="")
             print(flush=True)
         elif e["type"] == "decision":
             what = "temat wyczerpany" if e["block_exhausted"] else "kolejne pytanie"
@@ -201,7 +196,7 @@ def transcript_markdown(script: DebateScript, transcript: list[Turn]) -> str:
             in_closing = True
             lines += ["## Mowy końcowe", ""]
         label = SPEAKER_LABEL[t.speaker] + KIND_SUFFIX.get(t.kind, "")
-        lines += [f"**{label}:** {'_(pomija)_' if t.passed else t.text}", ""]
+        lines += [f"**{label}:** {t.text}", ""]
     return "\n".join(lines)
 
 

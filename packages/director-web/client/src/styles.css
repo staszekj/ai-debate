@@ -215,15 +215,8 @@ textarea {
 .turn--cats .cs-message__content {
   background: var(--cats);
 }
-.turn--ad_vocem .cs-message__content {
-  font-style: italic;
-  border-left: 3px solid var(--muted);
-}
 .turn--reprimand .cs-message__content {
   border-left: 3px solid var(--danger);
-}
-.turn--passed .cs-message__content {
-  color: var(--muted);
 }
 .director {
   font-size: 0.85rem;

@@ -53,7 +53,7 @@ flowchart LR
   G -- "zdarzenia: turn_start / token / turn_end" --> API
   G --- CP
   G -- "host_speak / host_decide" --> HOST
-  G -- "Psy / Koty: ad vocem, odpowiedź, mowa końcowa" --> LS
+  G -- "Psy / Koty: odpowiedź, mowa końcowa" --> LS
 ```
 
 ### Maszyna stanów debaty (graf LangGraph)
@@ -70,10 +70,8 @@ stateDiagram-v2
     Gate --> Interwencja : upomnienie / dodatkowe pytanie
     Interwencja --> Gate
     Gate --> Pytanie : brak zaległych komend
-    Pytanie --> AdVocem1 : pierwszy debatant
-    AdVocem1 --> Odpowiedz1
-    Odpowiedz1 --> AdVocem2 : drugi debatant
-    AdVocem2 --> Odpowiedz2
+    Pytanie --> Odpowiedz1 : pierwszy debatant
+    Odpowiedz1 --> Odpowiedz2 : drugi debatant
     Odpowiedz2 --> Decyzja : host_decide
     Decyzja --> Gate : kolejne pytanie (zmiana kolejności)
     Decyzja --> PodsumowanieBloku : temat wyczerpany lub questions_max
@@ -83,8 +81,6 @@ stateDiagram-v2
     Gate : director_gate
     Interwencja : Prowadzący upomina / zadaje pytanie reżysera
     Pytanie : Pytanie prowadzącego
-    AdVocem1 : Ad vocem (lub PASS)
-    AdVocem2 : Ad vocem (lub PASS)
     Odpowiedz1 : Odpowiedź
     Odpowiedz2 : Odpowiedź
     PodsumowanieBloku : Podsumowanie bloku
@@ -127,9 +123,6 @@ DebateScript
       guidance: str | None         # opcjonalne wskazówki dla prowadzącego
       questions_target: int = 5    # „około 5”
       questions_min / questions_max: int = 4 / 6
-  ad_vocem: AdVocem
-    enabled: bool = True
-    max_sentences: int = 3
   closing_statement:
     enabled: bool = True
     words: int = 100               # „około 100 słów”
@@ -141,16 +134,14 @@ Domyślny preset `psy-vs-koty` (plik JSON w `debate-core/presets/`):
 2. Obowiązki człowieka wobec zwierzęcia
 3. Koszty weterynaryjne
 
-Każdy blok ma ~5 pytań, włączone ad vocem i mowy końcowe po ~100 słów.
+Każdy blok ma ~5 pytań i włączone mowy końcowe po ~100 słów.
 
 ## Przebieg debaty
 1. **Otwarcie**: prowadzący wita, przedstawia temat, strony i plan bloków.
 2. **Dla każdego bloku**:
    1. Prowadzący zapowiada blok.
    2. **Pytanie**: prowadzący układa kolejne pytanie, biorąc pod uwagę temat bloku, dotychczasowe odpowiedzi i to, czego jeszcze nie poruszono. Pytanie trafia do obu debatantów, a kolejność odpowiedzi zmienia się co pytanie.
-   3. **Odpowiedź debatanta** to dwa kroki, czyli dwa osobne wywołania LLM, osobno streamowane i osobno pokazywane w UI:
-      - *ad vocem* (opcjonalne, maks. N zdań) do ostatniej wypowiedzi przeciwnika. Debatant może je pominąć, odpowiadając tokenem `PASS`.
-      - *odpowiedź* na pytanie.
+   3. **Odpowiedź debatanta** na pytanie to jedno wywołanie LLM, streamowane i pokazywane w UI.
    4. Po każdym pytaniu prowadzący decyduje (structured output: `{next_question | block_exhausted}`), czy temat jest wyczerpany. Liczba pytań mieści się w `questions_min..questions_max`, a domyślnie zbliża się do `questions_target`.
    5. Prowadzący krótko podsumowuje blok i przechodzi dalej.
 3. **Mowy końcowe**: każdy debatant w ~100 słowach mówi, dlaczego pies / kot jest lepszy dla człowieka. Kolejność odwrotna niż w pierwszym pytaniu.
@@ -170,7 +161,7 @@ Stan `DebateState`:
 - `script: DebateScript`
 - `phase: opening|block|closing_statements|closing|done`
 - `block_idx`, `question_idx`, `current_question`, `answer_order`
-- `transcript: list[Turn]`, gdzie `Turn` ma pola: speaker (`host|dogs|cats`), kind (`intro|block_intro|question|ad_vocem|answer|reprimand|block_summary|closing_statement|summary`), text, block_idx, passed (ad vocem pominięte przez `PASS`)
+- `transcript: list[Turn]`, gdzie `Turn` ma pola: speaker (`host|dogs|cats`), kind (`intro|block_intro|question|answer|reprimand|block_summary|closing_statement|summary`), text, block_idx
 - `step`: następny krok przebiegu (`opening|block_intro|question|debater|decide|block_summary|closing_statement|closing|done`), z którego korzysta router
 - `pending_director: list[DirectorCommand]`, `reprimands: dict[side, list[str]]`, `notes: list[str]`
 
@@ -178,7 +169,7 @@ Węzły:
 - `director_gate` zbiera komendy z kanału, obsługuje pauzę i stop, a `reprimand` i `extra_question` odkłada do realizacji.
 - Węzły prowadzącego, po jednym na krok: `host_opening`, `host_block_intro`, `host_question`, `host_reprimand`, `host_extra_question`, `host_block_summary`, `host_closing`. Prowadzący wie, która drużyna odpowiada pierwsza (kolejność ustala kod).
 - `host_decide` zwraca `block_exhausted?` i kolejne pytanie (structured output, `method="json_schema"`). Poniżej `questions_min` kod wymusza kolejne pytanie, a przy `questions_max` kończy blok bez wywołania LLM.
-- `debater_ad_vocem`, `debater_answer`, `debater_closing` to węzły sparametryzowane stroną. Wiadomości budowane są z perspektywy debatanta: system prompt strony + upomnienia + przycięty transkrypt (własne wypowiedzi jako `AIMessage`, cudze jako `HumanMessage` z prefiksem mówcy) + instrukcja kroku. Kolejne wiadomości tej samej roli są scalane. Ad vocem cytuje ostatnią wypowiedź przeciwnika i jest przycinane do `max_sentences`, a urwane zdanie na końcu wypowiedzi jest obcinane.
+- `debater_answer`, `debater_closing` to węzły sparametryzowane stroną. Wiadomości budowane są z perspektywy debatanta: system prompt strony + upomnienia + przycięty transkrypt (własne wypowiedzi jako `AIMessage`, cudze jako `HumanMessage` z prefiksem mówcy) + instrukcja kroku. Kolejne wiadomości tej samej roli są scalane, a urwane zdanie na końcu wypowiedzi jest obcinane.
 - `router` to funkcja wyboru następnego węzła na podstawie `phase`, liczników, schematu i oczekujących interwencji. Przed każdym węzłem wypowiedzi graf przechodzi przez `director_gate`.
 
 Zdarzenia (`turn_start`, `token`, `turn_end`, `phase`, `director_ack`, `decision`, `status`) węzły wysyłają przez `get_stream_writer()`, a odbiorca czyta `astream(stream_mode=["custom", "values"])`. Stan trzyma checkpointer `InMemorySaver` (dawniej `MemorySaver`) z `thread_id` per sesja. Modele i `DirectorChannel` trafiają do grafu przez `DebateDeps` przy `build_graph`.
@@ -193,8 +184,8 @@ Zdarzenia (`turn_start`, `token`, `turn_end`, `phase`, `director_ack`, `decision
   - komendy: `reprimand`, `extra_question`, `note` (z `id` nadawanym przez klienta), `pause`, `resume`, `stop`
 
 ## Aplikacja reżysera (`director-web`)
-- **Edytor schematu**: wybór presetu, edycja tytułu, dodawanie, usuwanie i zmiana kolejności bloków (temat, wskazówki, liczba pytań), ustawienia ad vocem i mowy końcowej, przycisk „Start”.
-- **Widok debaty**: `MainContainer` / `ChatContainer` / `MessageList` z chatscope. Prowadzący, psy i koty mają różne avatary i nazwy. Ad vocem ma osobny styl lub etykietę, a separatory (`MessageSeparator`) oznaczają bloki. Tokeny dopisują się na żywo, a podczas generowania widać `TypingIndicator`. Pasek postępu pokazuje bieżący blok i numer pytania.
+- **Edytor schematu**: wybór presetu, edycja tytułu, dodawanie, usuwanie i zmiana kolejności bloków (temat, wskazówki, liczba pytań), ustawienia mowy końcowej, przycisk „Start”.
+- **Widok debaty**: `MainContainer` / `ChatContainer` / `MessageList` z chatscope. Prowadzący, psy i koty mają różne avatary i nazwy, a separatory (`MessageSeparator`) oznaczają bloki. Tokeny dopisują się na żywo, a podczas generowania widać `TypingIndicator`. Pasek postępu pokazuje bieżący blok i numer pytania.
 - **Panel reżysera**: przyciski „Upomnij psy” / „Upomnij koty” (z powodem), „Dodatkowe pytanie” (z adresatem), notatka dla prowadzącego, Pauza / Wznów / Stop. Interwencje widać w czacie jako wiadomości reżysera do prowadzącego, ze statusem „oczekuje” / „zrealizowano”.
 - Uruchomienie: `pnpm --filter director-web dev` (Vite na :5173 z proxy do API) lub `build` + `start` (Express na :3000, uruchamiany przez Node bez kompilacji, type stripping).
 
@@ -245,7 +236,7 @@ Odbiór etapu 1:
 ### Etap 2: Debata w terminalu
 - [x] 4. `debate-core`: config, llms, `DebateScript` + preset `psy-vs-koty`
 - [x] 5. `debate-core`: prompty prowadzącego i debatantów (per krok), `build_debater_context`
-- [x] 6. `debate-core`: stan, router i graf bez interwencji (otwarcie, bloki, pytania, ad vocem, mowy końcowe, zamknięcie)
+- [x] 6. `debate-core`: stan, router i graf bez interwencji (otwarcie, bloki, pytania, mowy końcowe, zamknięcie)
 - [x] 7. `debate run` w CLI: pełna debata wg presetu w terminalu
 - [x] 8. `DirectorChannel` + `director_gate`: upomnienie, dodatkowe pytanie, notatka, pauza, stop
 
@@ -254,15 +245,15 @@ Odbiór etapu 2:
   - kolejność faz
   - liczba pytań w `min..max`
   - naprzemienna kolejność odpowiedzi
-  - ad vocem z `PASS` i przy wyłączonym ad vocem
+  - bezpośrednie odpowiedzi po pytaniu
   - mowy końcowe
 - [x] Testy interwencji:
   - upomnienie trafia do prowadzącego i do kontekstu debatanta
   - dodatkowe pytanie idzie jako następne i nie zmienia licznika bloku
   - pauza i wznowienie
   - stop
-- [x] E2E CLI: `debate run --preset psy-vs-koty`, czyli 3 bloki po ~5 pytań, ad vocem i mowy końcowe po ~100 słów
-- [ ] Przegląd jakości przez reżysera: pytania, ad vocem, długość i ton wypowiedzi (ewentualne poprawki promptów)
+- [ ] E2E CLI: `debate run --preset psy-vs-koty`, czyli 3 bloki po ~5 pytań i mowy końcowe po ~100 słów
+- [ ] Przegląd jakości przez reżysera: pytania, długość i ton wypowiedzi (ewentualne poprawki promptów)
 
 ### Etap 3: Web reżysera
 - [x] 9. `debate-api`: presety, sesje, WebSocket

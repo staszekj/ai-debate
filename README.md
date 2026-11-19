@@ -52,6 +52,8 @@ uv run debate run --preset psy-vs-koty --out runs/debata.md
 
 W trakcie można wpisywać komendy reżysera: `/upomnij koty <powód>`, `/pytanie [psy|koty|obie] <treść>`, `/notatka <treść>`, `/pauza`, `/wznow`, `/stop`. Własny schemat podaje się przez `--script schemat.json` (format jak w `packages/debate-core/src/debate_core/presets/`).
 
+Starsze schematy zawierające pole `ad_vocem` należy zaktualizować, usuwając to pole. Starsze checkpointy i klienci korzystający z poprzedniego formatu zdarzeń nie są obsługiwani.
+
 ## Konfiguracja (`.env.local`)
 
 | Zmienna | Domyślnie | Opis |

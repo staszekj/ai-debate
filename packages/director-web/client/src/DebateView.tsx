@@ -19,7 +19,6 @@ const SPEAKER: Record<Speaker, { name: string; emoji: string }> = {
   cats: { name: "Koty", emoji: "🐱" },
 };
 const KIND_LABEL: Partial<Record<TurnKind, string>> = {
-  ad_vocem: "ad vocem",
   closing_statement: "mowa końcowa",
   reprimand: "upomnienie",
   question: "pytanie",
@@ -68,20 +67,19 @@ function renderItem(item: ChatItem) {
       </MessageSeparator>
     );
   }
-  // ad vocem pokazujemy dopiero po zakończeniu (zamiast „PASS” informacja o pominięciu)
-  if (item.streaming && (item.kind === "ad_vocem" || !item.text)) return null;
+  if (item.streaming && !item.text) return null;
   const who = SPEAKER[item.speaker];
   const label = KIND_LABEL[item.kind];
   return (
     <Message
       key={item.key}
-      className={`turn turn--${item.speaker} turn--${item.kind}${item.passed ? " turn--passed" : ""}`}
+      className={`turn turn--${item.speaker} turn--${item.kind}`}
       model={{ direction: item.speaker === "cats" ? "outgoing" : "incoming", position: "single", type: "custom" }}
       avatarPosition={item.speaker === "cats" ? "tr" : "tl"}
     >
       <Avatar src={avatarSrc(who.emoji)} name={who.name} />
       <Message.Header sender={label ? `${who.name} · ${label}` : who.name} />
-      <Message.CustomContent>{item.passed ? "(pomija ad vocem)" : item.text}</Message.CustomContent>
+      <Message.CustomContent>{item.text}</Message.CustomContent>
     </Message>
   );
 }

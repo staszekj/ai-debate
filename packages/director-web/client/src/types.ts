@@ -6,7 +6,6 @@ export type TurnKind =
   | "intro"
   | "block_intro"
   | "question"
-  | "ad_vocem"
   | "answer"
   | "reprimand"
   | "block_summary"
@@ -26,7 +25,6 @@ export interface Block {
 export interface DebateScript {
   title: string;
   blocks: Block[];
-  ad_vocem: { enabled: boolean; max_sentences: number };
   closing_statement: { enabled: boolean; words: number };
   host_summary: boolean;
 }
@@ -55,7 +53,7 @@ export type AckStatus = "queued" | "pending" | "done";
 export type DebateEvent =
   | { type: "turn_start"; speaker: Speaker; kind: TurnKind; block_idx: number | null }
   | { type: "token"; text: string }
-  | { type: "turn_end"; speaker: Speaker; kind: TurnKind; text: string; block_idx: number | null; passed: boolean }
+  | { type: "turn_end"; speaker: Speaker; kind: TurnKind; text: string; block_idx: number | null }
   | { type: "phase"; phase: Phase }
   | { type: "decision"; block_exhausted: boolean; next_question?: string | null }
   | { type: "director_ack"; id: string; status: AckStatus; command?: DirectorCommand }

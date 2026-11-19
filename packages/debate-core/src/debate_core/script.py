@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from importlib import resources
+from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -24,11 +25,6 @@ class Block(BaseModel):
         return self
 
 
-class AdVocem(BaseModel):
-    enabled: bool = True
-    max_sentences: int = Field(3, ge=1)
-
-
 class ClosingStatement(BaseModel):
     enabled: bool = True
     words: int = Field(100, ge=20, description="Długość mowy końcowej („około N słów”)")
@@ -37,9 +33,15 @@ class ClosingStatement(BaseModel):
 class DebateScript(BaseModel):
     title: str = Field(min_length=1)
     blocks: list[Block] = Field(min_length=1)
-    ad_vocem: AdVocem = AdVocem()
     closing_statement: ClosingStatement = ClosingStatement()
     host_summary: bool = Field(True, description="Podsumowanie prowadzącego na koniec (bez werdyktu)")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _reject_removed_ad_vocem(cls, data: Any) -> Any:
+        if isinstance(data, dict) and "ad_vocem" in data:
+            raise ValueError("pole ad_vocem zostało usunięte; usuń je ze schematu debaty")
+        return data
 
 
 def list_presets() -> list[str]:

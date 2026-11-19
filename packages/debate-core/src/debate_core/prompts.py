@@ -18,11 +18,10 @@ from debate_core.state import DebateState, Side, Speaker, Turn, opponent
 TEAM = {"dogs": "Psy", "cats": "Koty"}
 ANIMAL = {"dogs": "pies", "cats": "kot"}
 SPEAKER_LABEL: dict[Speaker, str] = {"host": "Prowadzący", "dogs": "Psy", "cats": "Koty"}
-KIND_LABEL = {"ad_vocem": "ad vocem", "closing_statement": "mowa końcowa", "reprimand": "upomnienie"}
+KIND_LABEL = {"closing_statement": "mowa końcowa", "reprimand": "upomnienie"}
 
 # Ile znaków transkryptu trafia do debatanta (Bielik, kontekst 16k tokenów).
 DEBATER_TRANSCRIPT_CHARS = 16_000
-PASS_TOKEN = "PASS"
 
 
 # --- wspólne ---------------------------------------------------------------
@@ -36,13 +35,8 @@ def format_turn(turn: Turn) -> str:
 
 
 def visible_turns(transcript: list[Turn]) -> list[Turn]:
-    """Wypowiedzi, które faktycznie padły (bez pominiętych ad vocem)."""
-    return [t for t in transcript if not t.passed and t.text]
-
-
-def is_pass(text: str) -> bool:
-    cleaned = text.strip().strip(".!\"'«»„”*").upper()
-    return cleaned == PASS_TOKEN or (cleaned.startswith(PASS_TOKEN) and len(cleaned) <= len(PASS_TOKEN) + 3)
+    """Wypowiedzi, które faktycznie padły."""
+    return [t for t in transcript if t.text]
 
 
 _SENTENCE_END = re.compile(r"(?<=[.!?…])[\"”»]?\s+")
@@ -59,18 +53,6 @@ def trim_incomplete(text: str) -> str:
         return text
     sentences = split_sentences(text)
     return " ".join(sentences[:-1]) if len(sentences) > 1 else text
-
-
-def limit_sentences(text: str, max_sentences: int) -> str:
-    return " ".join(split_sentences(text)[:max_sentences])
-
-
-def last_statement(state: DebateState, side: Side) -> str | None:
-    """Ostatnia wypowiedź merytoryczna danej strony (odpowiedź, ad vocem, mowa)."""
-    for turn in reversed(visible_turns(state["transcript"])):
-        if turn.speaker == side:
-            return turn.text
-    return None
 
 
 # --- prowadzący ------------------------------------------------------------
@@ -223,15 +205,6 @@ def debater_system(side: Side, reprimands: list[str]) -> str:
             f"- {r}" for r in reprimands
         )
     return text
-
-
-def debater_ad_vocem(side: Side, max_sentences: int, opponent_statement: str) -> str:
-    return (
-        f"Ad vocem. Ostatnia wypowiedź drużyny „{TEAM[opponent(side)]}” brzmiała: „{opponent_statement}”\n"
-        f"Odnieś się krótko do tej wypowiedzi: wskaż słaby punkt albo sprostuj, maksymalnie w {max_sentences} "
-        "zdaniach. Nie odpowiadaj jeszcze na pytanie Prowadzącego, na to przyjdzie czas za chwilę. "
-        f"Jeśli nie masz nic istotnego do dodania, odpowiedz wyłącznie słowem {PASS_TOKEN}."
-    )
 
 
 def debater_answer(side: Side, question: str) -> str:

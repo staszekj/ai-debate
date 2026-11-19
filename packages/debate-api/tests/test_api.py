@@ -46,10 +46,14 @@ def test_presets(client: TestClient) -> None:
     assert {"id": "psy-vs-koty", "title": load_preset("psy-vs-koty").title} in presets
     assert client.get("/api/presets/psy-vs-koty").json()["blocks"][0]["topic"] == "Więź emocjonalna człowiek–zwierzę"
     assert client.get("/api/presets/nie-ma").status_code == 404
+    assert "ad_vocem" not in client.get("/api/presets/psy-vs-koty").json()
 
 
 def test_create_session_validates_script(client: TestClient) -> None:
     assert client.post("/api/sessions", json={"title": "x", "blocks": []}).status_code == 422
+    response = client.post("/api/sessions", json={**MINI, "ad_vocem": {"enabled": False}})
+    assert response.status_code == 422
+    assert "pole ad_vocem zostało usunięte" in response.text
 
 
 def test_ws_streams_full_debate_with_history(client: TestClient) -> None:
@@ -62,6 +66,13 @@ def test_ws_streams_full_debate_with_history(client: TestClient) -> None:
     assert {"turn_start", "token", "turn_end", "phase", "decision"} <= set(types)
     kinds = [e["kind"] for e in events if e["type"] == "turn_end"]
     assert kinds[0] == "intro" and kinds[-1] == "summary"
+    assert "ad_vocem" not in kinds
+    assert all("passed" not in e for e in events if e["type"] == "turn_end")
+    starts = [i for i, e in enumerate(events) if e["type"] == "turn_start" and e["kind"] == "answer"]
+    assert starts
+    for i in starts:
+        end = next(j for j in range(i + 1, len(events)) if events[j]["type"] == "turn_end")
+        assert any(e["type"] == "token" for e in events[i + 1 : end])
     assert client.get(f"/api/sessions/{session['session_id']}").json()["status"] == "done"
 
     # drugi klient po zakończeniu dostaje całą historię

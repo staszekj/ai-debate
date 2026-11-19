@@ -14,7 +14,6 @@
       "guidance": "Profilaktyka, szczepienia, typowe choroby, leczenie na starość, ubezpieczenie."
     }
   ],
-  "ad_vocem": { "enabled": true, "max_sentences": 3 },
   "closing_statement": { "enabled": true, "words": 100 },
   "host_summary": true
 }

@@ -18,7 +18,6 @@ TurnKind = Literal[
     "intro",  # otwarcie debaty
     "block_intro",  # zapowiedź bloku
     "question",  # pytanie prowadzącego (także dodatkowe pytanie reżysera)
-    "ad_vocem",
     "answer",
     "reprimand",
     "block_summary",
@@ -41,7 +40,6 @@ class Turn(BaseModel):
     kind: TurnKind
     text: str
     block_idx: int | None = None
-    passed: bool = False  # ad vocem pominięte odpowiedzią PASS
 
 
 def _command_id() -> str:
@@ -82,7 +80,6 @@ class DebateState(TypedDict):
     next_question: str | None  # pytanie przygotowane przez host_decide
     answer_order: list[Side]
     pending_speakers: list[Side]  # kto jeszcze odpowiada na bieżące pytanie
-    debater_substep: Literal["ad_vocem", "answer"]
     resume_step: Step | None  # dokąd wrócić po dodatkowym pytaniu
     first_order: list[Side]  # kolejność odpowiedzi na pierwsze pytanie
     closing_order: list[Side]  # kto jeszcze wygłasza mowę końcową
@@ -104,7 +101,6 @@ def initial_state(script: DebateScript) -> DebateState:
         next_question=None,
         answer_order=[],
         pending_speakers=[],
-        debater_substep="answer",
         resume_step=None,
         first_order=[],
         closing_order=[],

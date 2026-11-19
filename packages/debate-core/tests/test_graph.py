@@ -9,7 +9,7 @@ import pytest
 
 from debate_core.director import DirectorChannel
 from debate_core.graph import DebateDeps, build_graph, run_config
-from debate_core.script import AdVocem, Block, ClosingStatement, DebateScript, load_preset
+from debate_core.script import Block, ClosingStatement, DebateScript, load_preset
 from debate_core.state import ExtraQuestion, Note, Reprimand, Turn, initial_state
 
 from debate_core.testing import Decider, default_debater, default_host, last_text, make_deps
@@ -110,37 +110,20 @@ async def test_answer_order_alternates() -> None:
         assert order == (["dogs", "cats"] if i % 2 == 0 else ["cats", "dogs"])
 
 
-async def test_ad_vocem_before_answers_except_very_first() -> None:
-    final, _ = await run(script(blocks=1, qmin=2, qtarget=2, qmax=2), make_deps(decider=Decider(False)))
-    seq = [(t.speaker, t.kind) for t in final["transcript"] if t.kind in ("ad_vocem", "answer")]
+async def test_questions_are_followed_by_direct_answers() -> None:
+    final, events = await run(script(blocks=1, qmin=2, qtarget=2, qmax=2), make_deps(decider=Decider(False)))
+    seq = [(t.speaker, t.kind) for t in final["transcript"] if t.kind in ("question", "answer")]
     assert seq == [
-        ("dogs", "answer"),  # nikt jeszcze nie mówił: bez ad vocem
-        ("cats", "ad_vocem"),
+        ("host", "question"),
+        ("dogs", "answer"),
         ("cats", "answer"),
-        ("cats", "ad_vocem"),  # drugie pytanie: koty zaczynają
+        ("host", "question"),
         ("cats", "answer"),
-        ("dogs", "ad_vocem"),
         ("dogs", "answer"),
     ]
-
-
-async def test_ad_vocem_pass() -> None:
-    def debater(messages: Any) -> str:
-        return "PASS" if "PASS" in last_text(messages) else "Nasz argument."
-
-    final, events = await run(script(blocks=1, qmin=1, qtarget=1, qmax=1), make_deps(debater=debater))
-    ad_vocem = [t for t in final["transcript"] if t.kind == "ad_vocem"]
-    assert ad_vocem and all(t.passed and t.text == "" for t in ad_vocem)
     ends = [e for e in events if e["type"] == "turn_end" and e["kind"] == "ad_vocem"]
-    assert all(e["passed"] for e in ends)
-
-
-async def test_ad_vocem_disabled() -> None:
-    deps = make_deps(decider=Decider(False))
-    final, _ = await run(script(blocks=1, ad_vocem=AdVocem(enabled=False)), deps)
-    assert "ad_vocem" not in kinds(final["transcript"])
-    for model in deps.debaters.values():
-        assert not any("PASS" in last_text(call) for call in model.calls)
+    assert not ends
+    assert all("passed" not in e for e in events if e["type"] == "turn_end")
 
 
 async def test_closing_statements_reverse_order_and_length() -> None:
@@ -228,6 +211,40 @@ async def test_extra_question_waits_for_answers_to_finish() -> None:
     # pierwsza wymiana kończy się normalnie (obie odpowiedzi), dopiero potem dodatkowe pytanie
     assert seq[:3] == [("host", "question"), ("dogs", "answer"), ("cats", "answer")]
     assert seq[3] == ("host", "question")
+
+
+@pytest.mark.parametrize(("target", "expected"), [("dogs", ["dogs"]), ("cats", ["cats"]), ("both", ["dogs", "cats"])])
+async def test_extra_question_direct_answers(target: str, expected: list[str]) -> None:
+    director = DirectorChannel()
+    extra = ExtraQuestion(text="Dodatkowe pytanie?", target=target)
+    host = host_triggering("Otwórz debatę", lambda: director.send(extra))
+    final, _ = await run(script(blocks=1, qmin=1, qtarget=1, qmax=1), make_deps(host=host, director=director))
+    turns = final["transcript"]
+    question_idx = next(i for i, t in enumerate(turns) if t.kind == "question")
+    assert [(t.kind, t.speaker) for t in turns[question_idx + 1 : question_idx + 1 + len(expected)]] == [
+        ("answer", side) for side in expected
+    ]
+
+
+async def test_reprimand_can_interrupt_between_answers() -> None:
+    director = DirectorChannel()
+    sent: list[bool] = []
+
+    def debater(messages: Any) -> str:
+        if not sent:
+            sent.append(True)
+            director.send(Reprimand(target="cats", reason="bez dygresji"))
+        return default_debater(messages)
+
+    final, _ = await run(
+        script(blocks=1, qmin=1, qtarget=1, qmax=1),
+        make_deps(debater=debater, director=director),
+    )
+    turns = final["transcript"]
+    question_idx = next(i for i, t in enumerate(turns) if t.kind == "question")
+    assert [(t.kind, t.speaker) for t in turns[question_idx + 1 : question_idx + 4]] == [
+        ("answer", "dogs"), ("reprimand", "host"), ("answer", "cats")
+    ]
 
 
 async def test_note_reaches_host_system_prompt() -> None:

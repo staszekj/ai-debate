@@ -21,7 +21,6 @@ export type ChatItem =
       kind: TurnKind;
       text: string;
       streaming: boolean;
-      passed: boolean;
     }
   | { key: string; type: "separator"; label: string }
   | { key: string; type: "director"; command: DirectorCommand; status: AckStatus };
@@ -73,7 +72,6 @@ export function reduceEvent(state: DebateState, event: DebateEvent, script: Deba
         kind: event.kind,
         text: "",
         streaming: true,
-        passed: false,
       });
       return { ...state, items, blockIdx, questionNo, speaking: { speaker: event.speaker, kind: event.kind } };
     }
@@ -86,7 +84,7 @@ export function reduceEvent(state: DebateState, event: DebateEvent, script: Deba
       const updated =
         event.type === "token"
           ? { ...item, text: item.text + event.text }
-          : { ...item, text: event.text, passed: event.passed, streaming: false };
+          : { ...item, text: event.text, streaming: false };
       const items = state.items.with(idx, updated);
       return { ...state, items, speaking: event.type === "token" ? state.speaking : null };
     }

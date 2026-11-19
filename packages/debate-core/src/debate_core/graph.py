@@ -35,12 +35,11 @@ from debate_core.state import (
     Step,
     Turn,
     TurnKind,
-    opponent,
 )
 
 # Limity długości (tokeny). Prowadzący z adaptacyjnym myśleniem: zapas na thinking.
 HOST_MAX_TOKENS = 2000
-DEBATER_MAX_TOKENS = {"ad_vocem": 250, "answer": 500, "closing_statement": 600}
+DEBATER_MAX_TOKENS = {"answer": 500, "closing_statement": 600}
 RECURSION_LIMIT = 2000
 
 
@@ -73,25 +72,14 @@ async def _say(
     return "".join(parts).strip()
 
 
-def _turn(speaker: Speaker, kind: TurnKind, text: str, block_idx: int | None, passed: bool = False) -> Turn:
-    turn = Turn(speaker=speaker, kind=kind, text="" if passed else text, block_idx=block_idx, passed=passed)
+def _turn(speaker: Speaker, kind: TurnKind, text: str, block_idx: int | None) -> Turn:
+    turn = Turn(speaker=speaker, kind=kind, text=text, block_idx=block_idx)
     _emit({"type": "turn_end", **turn.model_dump()})
     return turn
 
 
 def _block_idx(state: DebateState) -> int | None:
     return state["block_idx"] if state["phase"] == "block" else None
-
-
-def _has_spoken(state: DebateState, side: Side) -> bool:
-    return any(t.speaker == side and not t.passed for t in state["transcript"])
-
-
-def _first_substep(state: DebateState, side: Side) -> str:
-    """Ad vocem tylko, gdy włączone i przeciwnik już coś powiedział."""
-    if state["script"].ad_vocem.enabled and _has_spoken(state, opponent(side)):
-        return "ad_vocem"
-    return "answer"
 
 
 def _answer_order(questions_total: int) -> list[Side]:
@@ -124,7 +112,6 @@ def _start_question(state: DebateState, text: str, targets: list[Side]) -> dict[
         "current_question": text,
         "answer_order": order,
         "pending_speakers": order,
-        "debater_substep": _first_substep(state, order[0]),
         "questions_total": state["questions_total"] + 1,
         "first_order": state["first_order"] or order,
         "step": "debater",
@@ -185,7 +172,7 @@ def build_graph(deps: DebateDeps, checkpointer: BaseCheckpointSaver | None = Non
         if at_question_point and any(isinstance(c, ExtraQuestion) for c in pending):
             return "host_extra_question"
         if step == "debater":
-            return f"debater_{state['debater_substep']}"
+            return "debater_answer"
         return {
             "opening": "host_opening",
             "block_intro": "host_block_intro",
@@ -283,28 +270,15 @@ def build_graph(deps: DebateDeps, checkpointer: BaseCheckpointSaver | None = Non
 
     # --- debatanci -----------------------------------------------------------
 
-    async def debater_ad_vocem(state: DebateState) -> dict[str, Any]:
-        side = state["pending_speakers"][0]
-        max_sentences = state["script"].ad_vocem.max_sentences
-        statement = prompts.last_statement(state, opponent(side)) or ""
-        instruction = prompts.debater_ad_vocem(side, max_sentences, statement)
-        text, block_idx = await debater_say(state, side, "ad_vocem", instruction)
-        passed = prompts.is_pass(text) or not text
-        turn = _turn(side, "ad_vocem", prompts.limit_sentences(text, max_sentences), block_idx, passed=passed)
-        return {"transcript": [turn], "debater_substep": "answer"}
-
     async def debater_answer(state: DebateState) -> dict[str, Any]:
         side, *rest = state["pending_speakers"]
         instruction = prompts.debater_answer(side, state["current_question"] or "")
         text, block_idx = await debater_say(state, side, "answer", instruction)
         turn = _turn(side, "answer", text, block_idx)
         update: dict[str, Any] = {"transcript": [turn], "pending_speakers": rest}
-        if rest:
-            # Następny debatant: przeciwnik właśnie mówił, więc ad vocem jest możliwe.
-            update["debater_substep"] = "ad_vocem" if state["script"].ad_vocem.enabled else "answer"
-        elif state["resume_step"]:
+        if not rest and state["resume_step"]:
             update.update(step=state["resume_step"], resume_step=None)
-        else:
+        elif not rest:
             update["step"] = "decide"
         return update
 
@@ -329,7 +303,6 @@ def build_graph(deps: DebateDeps, checkpointer: BaseCheckpointSaver | None = Non
         "host_extra_question": host_extra_question,
         "host_block_summary": host_block_summary,
         "host_closing": host_closing,
-        "debater_ad_vocem": debater_ad_vocem,
         "debater_answer": debater_answer,
         "debater_closing": debater_closing,
     }
