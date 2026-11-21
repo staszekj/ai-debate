@@ -6,6 +6,8 @@ from debate_core import prompts
 from debate_core.script import Block, DebateScript, list_presets, load_preset
 from debate_core.state import Turn, initial_state
 
+POSITIONS = {"dogs": "Więcej zieleni.", "cats": "Więcej mieszkań."}
+
 
 def test_preset_psy_vs_koty() -> None:
     assert "psy-vs-koty" in list_presets()
@@ -32,8 +34,31 @@ def test_removed_ad_vocem_field_is_rejected(value: object) -> None:
 
 
 def test_other_unknown_script_fields_are_ignored() -> None:
-    script = DebateScript.model_validate({"title": "Test", "blocks": [{"topic": "Temat"}], "other": 1})
+    script = DebateScript.model_validate({"title": "Test", "positions": POSITIONS, "blocks": [{"topic": "Temat"}], "other": 1})
     assert "other" not in script.model_dump()
+
+
+@pytest.mark.parametrize("positions", [None, {}, {"dogs": "x"}, {"dogs": "", "cats": "x"}, {"dogs": "x", "cats": " \n"}])
+def test_positions_are_required_and_not_blank(positions: object) -> None:
+    with pytest.raises(ValidationError):
+        DebateScript.model_validate({"title": "Test", "positions": positions, "blocks": [{"topic": "Temat"}]})
+
+
+def test_custom_topic_and_positions_in_prompts() -> None:
+    script = DebateScript.model_validate({
+        "title": "Przyszłość miast",
+        "positions": POSITIONS,
+        "blocks": [{"topic": "Przestrzeń publiczna"}],
+    })
+    host = prompts.host_system(script, [])
+    assert script.title in host
+    assert all(position in host for position in POSITIONS.values())
+    for side in ("dogs", "cats"):
+        system = prompts.debater_system(script, side, [])
+        assert script.title in system
+        assert all(position in system for position in POSITIONS.values())
+        assert f"Twoje stanowisko: {POSITIONS[side]}" in system
+        assert POSITIONS[side] in prompts.debater_closing(script, side, 100)
 
 
 def test_debater_context_perspective_and_merging() -> None:

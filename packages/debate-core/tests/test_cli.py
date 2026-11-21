@@ -1,9 +1,26 @@
+import argparse
+import json
+from pathlib import Path
+
 import pytest
 
-from debate_core.cli import TerminalPrinter, parse_director_command, transcript_markdown
+from debate_core.cli import TerminalPrinter, load_script, parse_director_command, transcript_markdown
 from debate_core.director import DirectorChannel
 from debate_core.script import load_preset
 from debate_core.state import ExtraQuestion, Note, Reprimand, Turn
+
+
+def test_load_custom_script(tmp_path: Path) -> None:
+    path = tmp_path / "script.json"
+    path.write_text(json.dumps({
+        "title": "Przyszłość miast",
+        "positions": {"dogs": "Więcej zieleni.", "cats": "Więcej mieszkań."},
+        "blocks": [{"topic": "Przestrzeń publiczna"}],
+    }), encoding="utf-8")
+    script = load_script(argparse.Namespace(script=str(path), preset="psy-vs-koty"))
+    assert script.title == "Przyszłość miast"
+    assert script.positions.dogs == "Więcej zieleni."
+    assert script.positions.cats == "Więcej mieszkań."
 
 
 async def drain(director: DirectorChannel) -> list:

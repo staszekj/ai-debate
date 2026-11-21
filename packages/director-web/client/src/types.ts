@@ -24,6 +24,7 @@ export interface Block {
 
 export interface DebateScript {
   title: string;
+  positions: Record<Side, string>;
   blocks: Block[];
   closing_statement: { enabled: boolean; words: number };
   host_summary: boolean;

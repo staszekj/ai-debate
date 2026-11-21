@@ -16,7 +16,6 @@ from debate_core.script import Block, DebateScript
 from debate_core.state import DebateState, Side, Speaker, Turn, opponent
 
 TEAM = {"dogs": "Psy", "cats": "Koty"}
-ANIMAL = {"dogs": "pies", "cats": "kot"}
 SPEAKER_LABEL: dict[Speaker, str] = {"host": "Prowadzący", "dogs": "Psy", "cats": "Koty"}
 KIND_LABEL = {"closing_statement": "mowa końcowa", "reprimand": "upomnienie"}
 
@@ -60,8 +59,9 @@ def trim_incomplete(text: str) -> str:
 
 def host_system(script: DebateScript, notes: list[str]) -> str:
     text = (
-        f"Prowadzisz debatę „{script.title}” między dwiema drużynami: „Psy” (broni tezy, że pies jest lepszym "
-        "towarzyszem człowieka) i „Koty” (broni tezy, że lepszy jest kot). Publiczność słucha na żywo.\n"
+        f"Prowadzisz debatę „{script.title}” między dwiema drużynami. "
+        f"Stanowisko drużyny „Psy”: {script.positions.dogs} "
+        f"Stanowisko drużyny „Koty”: {script.positions.cats} Publiczność słucha na żywo.\n"
         "Zasady:\n"
         "- Mówisz wyłącznie po polsku, naturalnie i zwięźle, jak moderator w studiu.\n"
         "- Jesteś bezstronny. Nigdy nie wskazujesz zwycięzcy ani nie oceniasz, kto ma rację.\n"
@@ -185,13 +185,15 @@ def host_closing() -> str:
 # --- debatanci -------------------------------------------------------------
 
 
-def debater_system(side: Side, reprimands: list[str]) -> str:
-    team, animal = TEAM[side], ANIMAL[side]
-    other_team, other_animal = TEAM[opponent(side)], ANIMAL[opponent(side)]
+def debater_system(script: DebateScript, side: Side, reprimands: list[str]) -> str:
+    team = TEAM[side]
+    other_team = TEAM[opponent(side)]
+    position = getattr(script.positions, side)
+    other_position = getattr(script.positions, opponent(side))
     text = (
-        f"Jesteś drużyną „{team}” w publicznej debacie „psy kontra koty”. Bronisz tezy, że {animal} jest "
-        f"lepszym towarzyszem człowieka niż {other_animal}. Przeciwnikiem jest drużyna „{other_team}”, "
-        "a debatę prowadzi Prowadzący.\n"
+        f"Jesteś drużyną „{team}” w publicznej debacie „{script.title}”. "
+        f"Twoje stanowisko: {position} Stanowisko drużyny „{other_team}”: {other_position} "
+        "Debatę prowadzi Prowadzący.\n"
         "Zasady:\n"
         "- Mówisz wyłącznie po polsku, w pierwszej osobie liczby mnogiej (my, nasza drużyna).\n"
         "- Argumentujesz rzeczowo i z werwą, ale kulturalnie. Nie obrażasz przeciwnika.\n"
@@ -214,10 +216,10 @@ def debater_answer(side: Side, question: str) -> str:
     )
 
 
-def debater_closing(side: Side, words: int) -> str:
+def debater_closing(script: DebateScript, side: Side, words: int) -> str:
     return (
         f"Wygłoś mowę końcową drużyny „{TEAM[side]}”, zwracając się bezpośrednio do publiczności: "
-        f"w około {words} słowach powiedz, dlaczego {ANIMAL[side]} jest lepszy dla człowieka. "
+        f"w około {words} słowach podsumuj i uzasadnij swoje stanowisko: {getattr(script.positions, side)} "
         "Nawiąż do najmocniejszych argumentów z debaty."
     )
 
@@ -253,6 +255,6 @@ def build_debater_context(state: DebateState, side: Side, instruction: str) -> l
         else:
             merged.append((role, text))
 
-    messages: list[BaseMessage] = [SystemMessage(debater_system(side, state["reprimands"].get(side, [])))]
+    messages: list[BaseMessage] = [SystemMessage(debater_system(state["script"], side, state["reprimands"].get(side, [])))]
     messages += [AIMessage(t) if role == "assistant" else HumanMessage(t) for role, t in merged]
     return messages

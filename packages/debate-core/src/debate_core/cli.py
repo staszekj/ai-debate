@@ -263,7 +263,7 @@ def cmd_run(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="debate", description="Debata psy vs koty")
+    parser = argparse.ArgumentParser(prog="debate", description="Debata drużyn Psy i Koty na wybrany temat")
     sub = parser.add_subparsers(dest="command", required=True)
     commands: dict[str, Callable[[argparse.Namespace], int]] = {"check": cmd_check, "run": cmd_run}
     sub.add_parser("check", help="ping prowadzącego i serwera debatantów")

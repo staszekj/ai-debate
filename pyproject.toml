@@ -1,7 +1,7 @@
 [project]
 name = "ai-debate"
 version = "0.1.0"
-description = "Symulacja debaty psy vs koty: prowadzący (LLM) i dwóch debatantów (Bielik)"
+description = "Symulacja debaty: prowadzący (LLM) i dwie drużyny debatantów (Bielik)"
 requires-python = ">=3.12"
 
 [tool.uv.workspace]

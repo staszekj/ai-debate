@@ -16,6 +16,7 @@ from debate_core.testing import Decider, make_deps
 
 MINI = {
     "title": "Test",
+    "positions": {"dogs": "Więcej zieleni.", "cats": "Więcej mieszkań."},
     "blocks": [{"topic": "Temat", "questions_min": 1, "questions_target": 2, "questions_max": 2}],
 }
 
@@ -55,11 +56,14 @@ def test_create_session_validates_script(client: TestClient) -> None:
     response = client.post("/api/sessions", json={**MINI, "ad_vocem": {"enabled": False}})
     assert response.status_code == 422
     assert "pole ad_vocem zostało usunięte" in response.text
+    assert client.post("/api/sessions", json={**MINI, "positions": {"dogs": " ", "cats": "x"}}).status_code == 422
+    assert client.post("/api/sessions", json={key: value for key, value in MINI.items() if key != "positions"}).status_code == 422
 
 
 def test_ws_streams_full_debate_with_history(client: TestClient) -> None:
     session = client.post("/api/sessions", json=MINI).json()
     assert session["status"] == "running"
+    assert session["script"]["positions"] == MINI["positions"]
     with client.websocket_connect(f"/ws/sessions/{session['session_id']}") as ws:
         events = read_until_end(ws)
     types = [e["type"] for e in events]
@@ -74,7 +78,9 @@ def test_ws_streams_full_debate_with_history(client: TestClient) -> None:
     for i in starts:
         end = next(j for j in range(i + 1, len(events)) if events[j]["type"] == "turn_end")
         assert any(e["type"] == "token" for e in events[i + 1 : end])
-    assert client.get(f"/api/sessions/{session['session_id']}").json()["status"] == "done"
+    fetched = client.get(f"/api/sessions/{session['session_id']}").json()
+    assert fetched["status"] == "done"
+    assert fetched["script"]["positions"] == MINI["positions"]
 
     # drugi klient po zakończeniu dostaje całą historię
     with client.websocket_connect(f"/ws/sessions/{session['session_id']}") as ws:

@@ -6,13 +6,13 @@ import json
 from importlib import resources
 from typing import Any
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 PRESETS_PACKAGE = "debate_core.presets"
 
 
 class Block(BaseModel):
-    topic: str = Field(min_length=1, description="Temat bloku, np. „Więź emocjonalna człowiek–zwierzę”")
+    topic: str = Field(min_length=1, description="Temat bloku, np. „Wpływ na mieszkańców”")
     guidance: str | None = Field(None, description="Opcjonalne wskazówki dla prowadzącego")
     questions_target: int = Field(5, ge=1, description="Docelowa liczba pytań („około 5”)")
     questions_min: int = Field(4, ge=1)
@@ -30,8 +30,21 @@ class ClosingStatement(BaseModel):
     words: int = Field(100, ge=20, description="Długość mowy końcowej („około N słów”)")
 
 
+class Positions(BaseModel):
+    dogs: str
+    cats: str
+
+    @field_validator("dogs", "cats")
+    @classmethod
+    def _not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("stanowisko nie może być puste")
+        return value
+
+
 class DebateScript(BaseModel):
     title: str = Field(min_length=1)
+    positions: Positions
     blocks: list[Block] = Field(min_length=1)
     closing_statement: ClosingStatement = ClosingStatement()
     host_summary: bool = Field(True, description="Podsumowanie prowadzącego na koniec (bez werdyktu)")

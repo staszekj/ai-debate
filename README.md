@@ -1,6 +1,6 @@
 # ai-debate
 
-Symulacja debaty „psy vs koty” po polsku. **Prowadzący** to komercyjny LLM (domyślnie Claude Haiku 5.5), a dwaj **debatanci**, Psy i Koty, to lokalny Bielik 11B serwowany przez vLLM. **Reżyser** (człowiek) ustala schemat debaty w aplikacji webowej i wpływa na nią wyłącznie przez prowadzącego. Szczegóły w [PLAN.md](PLAN.md).
+Symulacja debaty po polsku na wybrany temat. **Prowadzący** to komercyjny LLM (domyślnie Claude Haiku 5.5), a dwaj **debatanci**, Psy i Koty, to lokalny Bielik 11B serwowany przez vLLM. **Reżyser** (człowiek) ręcznie ustala temat, stanowiska drużyn i bloki debaty w aplikacji webowej, a w trakcie wpływa na nią wyłącznie przez prowadzącego.
 
 ```
 przeglądarka ── director-web (Express :3000 / Vite :5173) ── debate-api (FastAPI :8001) ── LangGraph
@@ -56,7 +56,22 @@ uv run debate run --preset psy-vs-koty --out runs/debata.md
 
 W trakcie można wpisywać komendy reżysera: `/upomnij koty <powód>`, `/pytanie [psy|koty|obie] <treść>`, `/notatka <treść>`, `/pauza`, `/wznow`, `/stop`. Własny schemat podaje się przez `--script schemat.json` (format jak w `packages/debate-core/src/debate_core/presets/`).
 
-Starsze schematy zawierające pole `ad_vocem` należy zaktualizować, usuwając to pole. Starsze checkpointy i klienci korzystający z poprzedniego formatu zdarzeń nie są obsługiwani.
+Przykładowy własny schemat:
+
+```json
+{
+  "title": "Czy miasta powinny ograniczać ruch samochodowy?",
+  "positions": {
+    "dogs": "Ograniczenia poprawiają zdrowie i przestrzeń publiczną.",
+    "cats": "Ograniczenia utrudniają mieszkańcom dostęp do miasta."
+  },
+  "blocks": [
+    { "topic": "Wpływ na mieszkańców", "questions_min": 1, "questions_target": 2, "questions_max": 3 }
+  ]
+}
+```
+
+Stanowiska obu drużyn są wymagane. Starsze schematy należy uzupełnić o `positions`, a jeśli zawierają `ad_vocem`, usunąć to pole. Starsze checkpointy i klienci korzystający z poprzedniego formatu zdarzeń nie są obsługiwani.
 
 ## Konfiguracja (`.env.local`)
 

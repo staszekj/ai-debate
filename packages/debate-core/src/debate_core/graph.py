@@ -327,7 +327,7 @@ def build_graph(deps: DebateDeps, checkpointer: BaseCheckpointSaver | None = Non
 
     async def debater_closing(state: DebateState) -> dict[str, Any]:
         side, *rest = state["closing_order"]
-        instruction = prompts.debater_closing(side, state["script"].closing_statement.words)
+        instruction = prompts.debater_closing(state["script"], side, state["script"].closing_statement.words)
         text, _ = await debater_say(state, side, "closing_statement", instruction)
         update: dict[str, Any] = {"transcript": [_turn(side, "closing_statement", text, None)], "closing_order": rest}
         if not rest:

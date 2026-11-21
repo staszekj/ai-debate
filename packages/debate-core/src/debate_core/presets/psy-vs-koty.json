@@ -1,5 +1,9 @@
 {
   "title": "Psy czy koty: kto jest lepszym towarzyszem człowieka?",
+  "positions": {
+    "dogs": "Pies jest lepszym towarzyszem człowieka niż kot.",
+    "cats": "Kot jest lepszym towarzyszem człowieka niż pies."
+  },
   "blocks": [
     {
       "topic": "Więź emocjonalna człowiek–zwierzę",

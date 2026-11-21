@@ -73,7 +73,7 @@ export function DirectorPanel({
         <h3>Notatka dla prowadzącego</h3>
         <textarea
           rows={2}
-          placeholder="np. dociśnij koty o alergie"
+          placeholder="np. poproś koty o konkretny przykład"
           value={note}
           onChange={(e) => setNote(e.target.value)}
         />

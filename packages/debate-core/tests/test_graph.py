@@ -11,7 +11,7 @@ from langchain_core.outputs import ChatGenerationChunk
 
 from debate_core.director import DirectorChannel
 from debate_core.graph import DebateDeps, build_graph, run_config
-from debate_core.script import Block, ClosingStatement, DebateScript, load_preset
+from debate_core.script import Block, ClosingStatement, DebateScript, Positions, load_preset
 from debate_core.state import ExtraQuestion, Note, Reprimand, Turn, initial_state
 
 from debate_core.testing import Decider, ScriptedChatModel, default_debater, default_host, last_text, make_deps
@@ -20,6 +20,7 @@ from debate_core.testing import Decider, ScriptedChatModel, default_debater, def
 def script(blocks: int = 2, qmin: int = 2, qtarget: int = 3, qmax: int = 4, **kwargs: Any) -> DebateScript:
     return DebateScript(
         title="Test",
+        positions=Positions(dogs="Popieramy ograniczenie ruchu.", cats="Sprzeciwiamy się ograniczeniu ruchu."),
         blocks=[
             Block(topic=f"Temat {i}", questions_min=qmin, questions_target=qtarget, questions_max=qmax)
             for i in range(blocks)
@@ -83,6 +84,28 @@ async def test_preset_runs_end_to_end() -> None:
     final, _ = await run(load_preset("psy-vs-koty"), make_deps(decider=Decider(exhausted=False)))
     assert questions_per_block(final["transcript"]) == {0: 6, 1: 6, 2: 6}
     assert final["phase"] == "done"
+
+
+async def test_custom_topic_and_positions_reach_models() -> None:
+    debate = script(blocks=1, qmin=1, qtarget=1, qmax=1)
+    debate.title = "Ruch samochodowy w miastach"
+    deps = make_deps()
+    final, events = await run(debate, deps)
+
+    assert final["phase"] == "done"
+    starts = [event for event in events if event["type"] == "model_start"]
+    host = next(event for event in starts if event["model"] == "host")
+    assert debate.title in host["messages"][0]["content"]
+    assert debate.positions.dogs in host["messages"][0]["content"]
+    assert debate.positions.cats in host["messages"][0]["content"]
+    for side in ("dogs", "cats"):
+        calls = [event for event in starts if event["model"] == side]
+        assert {event["step"] for event in calls} == {"answer", "closing_statement"}
+        for event in calls:
+            assert debate.title in event["messages"][0]["content"]
+            assert getattr(debate.positions, side) in event["messages"][0]["content"]
+        closing = next(event for event in calls if event["step"] == "closing_statement")
+        assert getattr(debate.positions, side) in closing["messages"][-1]["content"]
 
 
 @pytest.mark.parametrize(("exhausted", "expected"), [(True, 2), (False, 4)])

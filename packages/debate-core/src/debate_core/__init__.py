@@ -1,1 +1,1 @@
-"""debate-core: logika debaty psy vs koty, bez warstwy webowej."""
+"""debate-core: logika debaty drużyn Psy i Koty, bez warstwy webowej."""

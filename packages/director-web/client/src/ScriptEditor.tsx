@@ -69,7 +69,9 @@ export function ScriptEditor({ onStarted }: { onStarted: (session: SessionInfo) 
     update({ blocks });
   };
   const errors = script.blocks.map(blockError);
-  const invalid = !script.title.trim() || script.blocks.length === 0 || errors.some(Boolean);
+  const invalid =
+    !script.title.trim() || !script.positions.dogs.trim() || !script.positions.cats.trim() ||
+    script.blocks.length === 0 || errors.some(Boolean);
 
   const start = async () => {
     setStarting(true);
@@ -101,6 +103,25 @@ export function ScriptEditor({ onStarted }: { onStarted: (session: SessionInfo) 
           <span>Tytuł</span>
           <input value={script.title} onChange={(e) => update({ title: e.target.value })} />
         </label>
+        <label className="field">
+          <span>Stanowisko drużyny Psy</span>
+          <textarea
+            rows={2}
+            value={script.positions.dogs}
+            onChange={(e) => update({ positions: { ...script.positions, dogs: e.target.value } })}
+          />
+        </label>
+        <label className="field">
+          <span>Stanowisko drużyny Koty</span>
+          <textarea
+            rows={2}
+            value={script.positions.cats}
+            onChange={(e) => update({ positions: { ...script.positions, cats: e.target.value } })}
+          />
+        </label>
+        {(!script.positions.dogs.trim() || !script.positions.cats.trim()) && (
+          <p className="error">Podaj stanowiska obu drużyn.</p>
+        )}
       </section>
 
       <h2>Bloki tematyczne</h2>
