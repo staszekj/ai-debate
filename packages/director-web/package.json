@@ -3,17 +3,14 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Aplikacja reżysera (etap 3): Express + React + Vite + chatscope",
+  "description": "Aplikacja reżysera: Express + React + Vite",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "start": "node server/index.ts",
-    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.server.json",
-    "test": "node --test client/tests/*.test.mjs"
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.server.json"
   },
   "dependencies": {
-    "@chatscope/chat-ui-kit-react": "^2.1.1",
-    "@chatscope/chat-ui-kit-styles": "^1.4.0",
     "express": "^5.3.0",
     "http-proxy-middleware": "^4.2.2",
     "react": "^19.3.1",

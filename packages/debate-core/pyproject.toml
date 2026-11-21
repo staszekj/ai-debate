@@ -8,12 +8,15 @@ dependencies = [
     "langchain-anthropic>=1.7.10",
     "langchain-openai>=1.8.0",
     "langgraph>=1.2.22",
+    "httpx>=0.28",
+    "mcp>=1.12,<2",
     "pydantic-settings>=2.16.3",
     "python-dotenv>=1.2.4",
 ]
 
 [project.scripts]
-debate = "debate_core.cli:main"
+debate = "debate_core.expert_cli:main"
+debate-mcp = "debate_core.mcp_service:main"
 
 [project.optional-dependencies]
 google = [

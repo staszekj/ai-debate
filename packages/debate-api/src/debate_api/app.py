@@ -1,8 +1,6 @@
 """FastAPI: REST + WebSocket nad grafem debaty.
 
-    GET  /api/presets             lista gotowych schematów
-    GET  /api/presets/{id}        jeden schemat
-    POST /api/sessions            DebateScript → start debaty, zwraca session_id
+    POST /api/sessions            pytanie → start debaty, zwraca session_id
     GET  /api/sessions/{id}       status sesji
     WS   /ws/sessions/{id}        zdarzenia debaty (z historią) i komendy reżysera
 """
@@ -15,56 +13,46 @@ from contextlib import asynccontextmanager
 from typing import Annotated, Any, Literal
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel, Field, TypeAdapter, ValidationError
+from pydantic import BaseModel, StringConstraints, ValidationError
 
-from debate_api.sessions import DepsFactory, Session, SessionManager, default_deps
-from debate_core.script import DebateScript, list_presets, load_preset
-from debate_core.state import DirectorCommand
+from debate_api.sessions import DepsFactory, Session, SessionManager
+from debate_core.mcp_service import make_expert_deps
 
 
 class Control(BaseModel):
     type: Literal["pause", "resume", "stop"]
 
 
-IncomingCommand = TypeAdapter(Annotated[DirectorCommand | Control, Field(discriminator="type")])
-
-
-class PresetInfo(BaseModel):
-    id: str
-    title: str
+class SessionRequest(BaseModel):
+    question: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]
 
 
 class SessionInfo(BaseModel):
     session_id: str
     status: str
-    phase: str
-    script: DebateScript
+    question: str
 
 
 def _info(session: Session) -> SessionInfo:
-    return SessionInfo(session_id=session.id, status=session.status, phase=session.phase, script=session.script)
+    return SessionInfo(session_id=session.id, status=session.status, question=session.question)
 
 
 def handle_command(session: Session, raw: dict[str, Any]) -> dict[str, Any]:
     """Wykonuje komendę reżysera i zwraca zdarzenie potwierdzenia (albo błędu) dla klienta."""
     try:
-        cmd = IncomingCommand.validate_python(raw)
-    except ValidationError as e:
-        return {"type": "error", "message": "nieprawidłowa komenda", "details": e.errors(include_url=False)}
-    if isinstance(cmd, Control):
-        director = session.director
-        {"pause": director.pause, "resume": director.resume, "stop": director.stop}[cmd.type]()
-        status = {"pause": "paused", "resume": "running", "stop": "stopping"}[cmd.type]
-        if cmd.type != "stop":
-            session.publish({"type": "status", "status": status})
-        return {"type": "control_ack", "command": cmd.type}
-    session.director.send(cmd)
-    ack = {"type": "director_ack", "id": cmd.id, "status": "queued", "command": cmd.model_dump()}
-    session.publish(ack)  # historia: klient po ponownym połączeniu widzi wysłane komendy
-    return ack
+        cmd = Control.model_validate(raw)
+    except ValidationError:
+        return {"type": "error", "message": "Nieprawidłowa komenda."}
+    if session.finished or session.director.stopped:
+        return {"type": "error", "message": "Sesja nie przyjmuje już poleceń."}
+    director = session.director
+    {"pause": director.pause, "resume": director.resume, "stop": director.stop}[cmd.type]()
+    status = {"pause": "paused", "resume": "running", "stop": "stopping"}[cmd.type]
+    session.publish({"type": "status", "status": status})
+    return {"type": "control_ack", "command": cmd.type}
 
 
-def create_app(deps_factory: DepsFactory = default_deps) -> FastAPI:
+def create_app(deps_factory: DepsFactory = make_expert_deps) -> FastAPI:
     manager = SessionManager(deps_factory)
 
     @asynccontextmanager
@@ -80,20 +68,9 @@ def create_app(deps_factory: DepsFactory = default_deps) -> FastAPI:
             raise HTTPException(404, "nie ma takiej sesji")
         return session
 
-    @app.get("/api/presets")
-    def presets() -> list[PresetInfo]:
-        return [PresetInfo(id=p, title=load_preset(p).title) for p in list_presets()]
-
-    @app.get("/api/presets/{preset_id}")
-    def preset(preset_id: str) -> DebateScript:
-        try:
-            return load_preset(preset_id)
-        except KeyError:
-            raise HTTPException(404, "nie ma takiego presetu") from None
-
     @app.post("/api/sessions", status_code=201)
-    async def create_session(script: DebateScript) -> SessionInfo:
-        return _info(manager.create(script))
+    async def create_session(request: SessionRequest) -> SessionInfo:
+        return _info(manager.create(request.question))
 
     @app.get("/api/sessions/{session_id}")
     def get_session(session_id: str) -> SessionInfo:
@@ -120,7 +97,7 @@ def create_app(deps_factory: DepsFactory = default_deps) -> FastAPI:
                     await websocket.send_json({"type": "error", "message": "oczekiwano JSON"})
                     continue
                 reply = handle_command(session, raw if isinstance(raw, dict) else {})
-                if reply["type"] != "director_ack":  # ack komendy idzie do wszystkich przez historię
+                if reply["type"] == "error":
                     await websocket.send_json(reply)
 
         sender, receiver = asyncio.create_task(send_events()), asyncio.create_task(receive_commands())

@@ -1,4 +1,3 @@
-import "@chatscope/chat-ui-kit-styles/dist/default/styles.min.css";
 import "./styles.css";
 
 import { StrictMode } from "react";

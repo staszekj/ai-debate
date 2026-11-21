@@ -13,6 +13,21 @@
   color: var(--text);
 }
 
+.expert-shell { max-width: 58rem; margin: 0 auto; padding: 2rem 1rem; overflow-wrap: anywhere; }
+.expert-form { display: grid; gap: 1rem; }
+.expert-form button { justify-self: start; }
+.expert-top { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; margin-bottom: 1.25rem; }
+.expert-top .row { margin-left: auto; }
+.expert-timeline { display: grid; gap: 0.75rem; margin-top: 1.25rem; }
+.expert-turn { border-radius: 6px; padding: 0.8rem 1rem; }
+.expert-turn--dogs { background: var(--dogs); }
+.expert-turn--cats { background: var(--cats); }
+.expert-turn h2, .expert-research h2 { margin: 0 0 0.4rem; }
+.expert-turn p { white-space: pre-wrap; }
+.expert-timeline p { margin: 0; }
+.expert-research { border-left: 2px solid var(--accent); padding: 0.25rem 0.75rem; }
+.expert-research ul { margin: 0.35rem 0 0; padding-left: 1.25rem; }
+
 * {
   box-sizing: border-box;
 }

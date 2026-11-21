@@ -14,7 +14,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from debate_core.state import Side
+from debate_core.expert_graph import Side
 
 ENV_FILE = ".env.local"
 
