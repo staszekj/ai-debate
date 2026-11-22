@@ -7,10 +7,12 @@ type Source = { title: string; url: string; excerpt: string };
 type DebateEvent =
   | { type: "status"; status: Status; message?: string }
   | { type: "error"; message: string }
+  | { type: "expert_suggested"; side: Side }
   | { type: "turn_start"; speaker: Side }
   | { type: "turn_end"; speaker: Side; text: string }
-  | { type: "research_start"; speaker: Side; query: string }
-  | { type: "research_end"; speaker: Side; query: string; status: "found" | "empty" | "unavailable"; sources: Source[] };
+  | { type: "research_start"; query: string }
+  | { type: "research_end"; query: string; status: "found" | "empty" | "unavailable"; sources: Source[] }
+  | { type: "summary"; text: string };
 
 const names = { dogs: "Psy", cats: "Koty" };
 const statuses = { running: "W toku", paused: "Wstrzymana", stopping: "Zatrzymywanie", stopped: "Zatrzymana", done: "Zakończona", error: "Błąd" };
@@ -43,8 +45,9 @@ function LiveDebate({ session, onBack }: { session: Session; onBack: () => void 
   }, [session.session_id]);
 
   const status = events.findLast((event) => event.type === "status")?.status ?? session.status;
-  const last = events.findLast((event) => event.type !== "status" && event.type !== "error");
-  const send = (type: "pause" | "resume" | "stop") => socket.current?.send(JSON.stringify({ type }));
+  const last = events.findLast((event) => event.type !== "status" && event.type !== "error" && event.type !== "expert_suggested");
+  const send = (command: { type: "pause" | "resume" | "stop" } | { type: "suggest_expert"; side: Side }) =>
+    socket.current?.send(JSON.stringify(command));
   const canControl = connected && (status === "running" || status === "paused");
 
   return (
@@ -53,25 +56,36 @@ function LiveDebate({ session, onBack }: { session: Session; onBack: () => void 
         <button onClick={onBack}>Nowa debata</button>
         <span aria-live="polite">{statuses[status]}</span>
         <div className="row">
-          <button disabled={!canControl} onClick={() => send(status === "paused" ? "resume" : "pause")}>
+          <button disabled={!canControl} onClick={() => send({ type: status === "paused" ? "resume" : "pause" })}>
             {status === "paused" ? "Wznów" : "Wstrzymaj"}
           </button>
-          <button className="danger" disabled={!canControl} onClick={() => send("stop")}>Zatrzymaj</button>
+          <button className="danger" disabled={!canControl} onClick={() => send({ type: "stop" })}>Zatrzymaj</button>
         </div>
       </header>
       <h1>{session.question}</h1>
+      <div className="row" role="group" aria-label="Sugestia następnego eksperta">
+        <button disabled={!canControl} onClick={() => send({ type: "suggest_expert", side: "dogs" })}>Zasugeruj Psy</button>
+        <button disabled={!canControl} onClick={() => send({ type: "suggest_expert", side: "cats" })}>Zasugeruj Koty</button>
+      </div>
       {connectionError && <p className="error" role="alert">{connectionError}</p>}
       <div className="expert-timeline" aria-live="polite">
         {events.map((event, index) => {
+          if (event.type === "expert_suggested") return <p key={index}>Sugestia reżysera: {names[event.side]}</p>;
           if (event.type === "turn_end") return (
             <article key={index} className={`expert-turn expert-turn--${event.speaker}`}>
               <h2>{names[event.speaker]}</h2>
               <p>{event.text}</p>
             </article>
           );
+          if (event.type === "summary") return (
+            <article key={index} className="expert-turn">
+              <h2>Podsumowanie debaty</h2>
+              <p>{event.text}</p>
+            </article>
+          );
           if (event.type === "research_end") return (
             <section className="expert-research" key={index}>
-              <h2>Wikipedia · {names[event.speaker]}</h2>
+              <h2>Wikipedia</h2>
               <p>{event.query}</p>
               {event.status === "unavailable" && <p>Wikipedia jest niedostępna.</p>}
               {event.status === "empty" && <p>Nie znaleziono materiałów.</p>}
@@ -83,7 +97,7 @@ function LiveDebate({ session, onBack }: { session: Session; onBack: () => void 
           if ((event.type === "error" || event.type === "status") && event.message) return <p className="error" key={index}>{event.message}</p>;
           return null;
         })}
-        {status === "running" && last?.type === "research_start" && <p>Wikipedia · {names[last.speaker]}: {last.query}…</p>}
+        {status === "running" && last?.type === "research_start" && <p>Wikipedia: {last.query}…</p>}
         {status === "running" && last?.type === "turn_start" && <p>{names[last.speaker]} przygotowują wypowiedź…</p>}
       </div>
     </main>

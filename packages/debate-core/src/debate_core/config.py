@@ -14,7 +14,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from debate_core.expert_graph import Side
+from debate_core.graph import Side
 
 ENV_FILE = ".env.local"
 
@@ -32,7 +32,7 @@ def find_env_file(start: Path | None = None) -> Path | None:
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
-    # Prowadzący: dowolny model obsługiwany przez `init_chat_model` ("dostawca:model").
+    # Koordynator: dowolny model obsługiwany przez `init_chat_model` ("dostawca:model").
     host_model: str = "anthropic:claude-haiku-5-5"
     # Effort (głębokość myślenia) dla modeli Anthropic; pusty = domyślny modelu.
     host_effort: str | None = "low"
@@ -46,10 +46,16 @@ class Settings(BaseSettings):
     # Opcjonalne rozdzielenie stron na osobne serwery.
     dogs_base_url: str | None = None
     cats_base_url: str | None = None
+    dogs_model: str | None = None
+    cats_model: str | None = None
 
     def base_url_for(self, side: Side) -> str:
         override = {"dogs": self.dogs_base_url, "cats": self.cats_base_url}[side]
         return override or self.debater_base_url
+
+    def model_for(self, side: Side) -> str:
+        override = {"dogs": self.dogs_model, "cats": self.cats_model}[side]
+        return override or self.debater_model
 
 
 @lru_cache

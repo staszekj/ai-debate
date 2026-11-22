@@ -13,14 +13,23 @@ from contextlib import asynccontextmanager
 from typing import Annotated, Any, Literal
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel, StringConstraints, ValidationError
+from pydantic import BaseModel, Field, StringConstraints, TypeAdapter, ValidationError
 
 from debate_api.sessions import DepsFactory, Session, SessionManager
+from debate_core.director import Side
 from debate_core.mcp_service import make_expert_deps
 
 
 class Control(BaseModel):
     type: Literal["pause", "resume", "stop"]
+
+
+class SuggestExpert(BaseModel):
+    type: Literal["suggest_expert"]
+    side: Side
+
+
+COMMAND = TypeAdapter(Annotated[Control | SuggestExpert, Field(discriminator="type")])
 
 
 class SessionRequest(BaseModel):
@@ -40,12 +49,17 @@ def _info(session: Session) -> SessionInfo:
 def handle_command(session: Session, raw: dict[str, Any]) -> dict[str, Any]:
     """Wykonuje komendę reżysera i zwraca zdarzenie potwierdzenia (albo błędu) dla klienta."""
     try:
-        cmd = Control.model_validate(raw)
+        cmd = COMMAND.validate_python(raw)
     except ValidationError:
         return {"type": "error", "message": "Nieprawidłowa komenda."}
     if session.finished or session.director.stopped:
         return {"type": "error", "message": "Sesja nie przyjmuje już poleceń."}
     director = session.director
+    if isinstance(cmd, SuggestExpert):
+        director.suggest_expert(cmd.side)
+        event = {"type": "expert_suggested", "side": cmd.side}
+        session.publish(event)
+        return event
     {"pause": director.pause, "resume": director.resume, "stop": director.stop}[cmd.type]()
     status = {"pause": "paused", "resume": "running", "stop": "stopping"}[cmd.type]
     session.publish({"type": "status", "status": status})

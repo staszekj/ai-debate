@@ -1,14 +1,26 @@
-"""Pause, resume and stop controls for a debate."""
+"""Debate controls and the director's next-expert preference."""
 
 from __future__ import annotations
 
 import asyncio
+from typing import Literal
+
+Side = Literal["dogs", "cats"]
+
 
 class DirectorChannel:
     def __init__(self) -> None:
         self._running = asyncio.Event()
         self._running.set()
         self._stopped = False
+        self._preferred_expert: Side | None = None
+
+    def suggest_expert(self, side: Side) -> None:
+        self._preferred_expert = side
+
+    def take_expert_preference(self) -> Side | None:
+        preference, self._preferred_expert = self._preferred_expert, None
+        return preference
 
     @property
     def paused(self) -> bool:

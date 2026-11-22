@@ -1,10 +1,12 @@
 # Psy kontra Koty
 
-Debata po polsku: użytkownik podaje pytanie, a jeden graf LangGraph wykonuje cztery tury. Komercyjny LLM koordynuje zbieranie materiałów; nie zabiera głosu. Narzędzia eksperckie MCP są oparte na jednym lokalnym Bieliku uruchomionym w vLLM.
+Debata po polsku: komercyjny LLM (`brain_control`) wybiera wyszukiwanie w Wikipedii lub eksperta MCP i na końcu podsumowuje debatę. Graf pilnuje dwóch wypowiedzi na eksperta, ale nie narzuca kolejności. Reżyser może zasugerować następnego mówcę w UI; decyzja nadal należy do koordynatora.
 
 ## Uruchomienie
 
-Wymagania: `uv`, Node 26, `pnpm` 12 oraz działający vLLM z modelem Bielik. Ustaw klucz dostawcy komercyjnego modelu w `.env.local` według `.env.example`. Nazwa ustawienia `HOST_MODEL` teraz wybiera model koordynatora.
+Wymagania: `uv`, Node 26, `pnpm` 12 oraz serwery SLM z API zgodnym z OpenAI. Ustaw klucz dostawcy modelu komercyjnego i `HOST_MODEL` w `.env.local` według `.env.example`.
+
+Dwie niezależne instancje ekspertów skonfigurujesz przez `DOGS_BASE_URL` i `DOGS_MODEL` oraz `CATS_BASE_URL` i `CATS_MODEL`. Adresy mogą prowadzić do różnych GPU lub maszyn. Do lokalnego demo na jednym GPU możesz pominąć te nadpisania: oba narzędzia użyją wtedy wspólnego `DEBATER_BASE_URL` i `DEBATER_MODEL`, z osobnymi promptami.
 
 ```bash
 uv sync --all-packages
@@ -14,7 +16,7 @@ pnpm install --frozen-lockfile
 Uruchom poniższe polecenia w osobnych terminalach:
 
 ```bash
-./infra/vllm.sh                    # Bielik: 127.0.0.1:8000
+./infra/vllm.sh                    # opcjonalny wspólny Bielik do lokalnego demo
 uv run debate-mcp                 # narzędzia: 127.0.0.1:8002/mcp
 uv run debate-api                 # REST i WebSocket: 127.0.0.1:8001
 pnpm --filter director-web dev    # UI: localhost:5173

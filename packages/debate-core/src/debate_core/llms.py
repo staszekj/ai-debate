@@ -1,4 +1,4 @@
-"""Fabryki modeli: prowadzący (komercyjny LLM) i debatanci (Bielik przez vLLM)."""
+"""Factory functions for the coordinator and the two experts."""
 
 from __future__ import annotations
 
@@ -9,11 +9,10 @@ from langchain_core.language_models import BaseChatModel
 from langchain_openai import ChatOpenAI
 
 from debate_core.config import Settings, get_settings
-from debate_core.expert_graph import Side
+from debate_core.graph import Side
 
 
-def make_host(settings: Settings | None = None, **kwargs: Any) -> BaseChatModel:
-    """Prowadzący. Dostawcę wybiera `HOST_MODEL`, np. `anthropic:claude-haiku-5-5`."""
+def make_brain(settings: Settings | None = None, **kwargs: Any) -> BaseChatModel:
     s = settings or get_settings()
     if s.host_model.startswith("anthropic:") and s.host_effort:
         kwargs.setdefault("effort", s.host_effort)
@@ -26,7 +25,7 @@ def make_debater(side: Side, settings: Settings | None = None, **kwargs: Any) ->
     kwargs.setdefault("temperature", s.debater_temperature)
     return ChatOpenAI(
         base_url=s.base_url_for(side),
-        model=s.debater_model,
+        model=s.model_for(side),
         api_key=s.debater_api_key,
         **kwargs,
     )

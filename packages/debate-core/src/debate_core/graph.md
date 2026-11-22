@@ -2,15 +2,16 @@
 
 ```mermaid
 flowchart TD
-    Start --> Gate[Sprawdź sterowanie i wybierz stronę]
-    Gate -->|Cztery wypowiedzi lub stop| End[Koniec]
-    Gate -->|Limit wyszukiwań| Expert[Ekspert Psy lub Koty przez MCP]
-    Gate --> Coordinate[LLM koordynuje zebranie materiałów]
-    Coordinate -->|Nowa fraza| Search[Wikipedia przez MCP]
-    Coordinate -->|Gotowe lub powtórzona fraza| Expert
-    Search --> Gate
-    Expert --> Publish[Zapisz wypowiedź i wyczyść materiały tury]
-    Publish --> Gate
+    START --> human_control
+    human_control -->|Stop| END
+    human_control --> brain_control
+    brain_control --> wikipedia
+    brain_control --> dog_expert
+    brain_control --> cat_expert
+    brain_control -->|Podsumowanie lub stop| END
+    wikipedia --> human_control
+    dog_expert --> human_control
+    cat_expert --> human_control
 ```
 
-Kolejność i limit wyszukiwań wyznacza kod. Koordynator zwraca frazę lub `null`. Wikipedia zwraca fragmenty artykułów i adresy; brak wyników i błędy trafiają do kontekstu aktualnego eksperta jako notatka. Ekspert otrzymuje również pytanie i dotychczasowe publiczne wypowiedzi. Materiały badawcze nie przechodzą automatycznie na drugą stronę, ale źródła są widoczne w UI. Wypowiedź jest publikowana w całości.
+Kolejność ekspertów wybiera `brain_control`, biorąc pod uwagę niewiążącą sugestię przekazaną przez `human_control`. Kod ogranicza debatę do dwóch wypowiedzi każdego eksperta i najwyżej dwóch wyszukiwań między wypowiedziami. Po ostatniej wypowiedzi `brain_control` podsumowuje obie strony. Szczegóły opisuje [dokumentacja węzłów](expert_graph.md).

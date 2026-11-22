@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from debate_core.director import DirectorChannel
-from debate_core.expert_graph import ExpertDebateDeps, build_expert_graph, initial_expert_state
+from debate_core.graph import ExpertDebateDeps, build_graph, initial_state
 from debate_core.mcp_service import make_expert_deps
 
 log = logging.getLogger(__name__)
@@ -60,9 +60,9 @@ class Session:
         self._subscribers.clear()
 
     async def run(self, deps: ExpertDebateDeps) -> None:
-        graph = build_expert_graph(deps)
+        graph = build_graph(deps)
         try:
-            async for event in graph.astream(initial_expert_state(self.question), stream_mode="custom"):
+            async for event in graph.astream(initial_state(self.question), stream_mode="custom"):
                 self.publish(event)
             self.publish({"type": "status", "status": "stopped" if self.director.stopped else "done"})
         except Exception:
