@@ -51,9 +51,10 @@ class DebateState(TypedDict):
 
 @dataclass
 class ExpertDebateDeps:
-    brain_control: Callable[[ExpertInput, list[str], list[Action], Side | None], Awaitable[ResearchDecision]]
-    search: Callable[[str], Awaitable[list[Source]]]
-    reply: Callable[[Side, ExpertInput], Awaitable[str]]
+    brain_control: Callable[[ExpertInput, list[str], list[Action], Side | None, str | None], Awaitable[ResearchDecision]]
+    wikipedia: Callable[[str], Awaitable[list[Source]]]
+    dog_expert: Callable[[ExpertInput], Awaitable[str]]
+    cat_expert: Callable[[ExpertInput], Awaitable[str]]
     director: DirectorChannel
     summarize: Callable[[str, list[Speech]], Awaitable[str]]
 
@@ -83,15 +84,21 @@ def build_graph(deps: ExpertDebateDeps):
 
         if len(state["queries"]) < SEARCH_LIMIT:
             actions.append("wikipedia")
+        preference = state["preferred_expert"]
+        if preference is not None and EXPERTS[preference] not in actions:
+            preference = None
+        previous_queries = {previous.casefold() for previous in state["queries"]}
+        feedback = None
         for _ in range(2):
-            preference = state["preferred_expert"]
-            if preference is not None and EXPERTS[preference] not in actions:
-                preference = None
-            decision = await deps.brain_control(expert_input(state), state["queries"], actions, preference)
+            decision = await deps.brain_control(expert_input(state), state["queries"], actions, preference, feedback)
             query = (decision.query or "").strip()[:300]
-            if decision.action in actions and (decision.action != "wikipedia" or (
-                query and query.casefold() not in {previous.casefold() for previous in state["queries"]}
-            )):
+            if decision.action not in actions:
+                feedback = f"Akcja {decision.action} jest niedozwolona. Wybierz jedną z allowed_actions."
+            elif decision.action == "wikipedia" and not query:
+                feedback = "Akcja wikipedia wymaga niepustego query. Podaj frazę albo wybierz eksperta."
+            elif decision.action == "wikipedia" and query.casefold() in previous_queries:
+                feedback = "Zapytanie Wikipedia zostało już użyte. Podaj frazę spoza queries albo wybierz eksperta."
+            else:
                 return {"action": decision.action, "query": query}
             if await deps.director.checkpoint():
                 return {"action": None}
@@ -103,7 +110,7 @@ def build_graph(deps: ExpertDebateDeps):
         emit({"type": "research_start", "query": query})
         notes = state["research_notes"]
         try:
-            sources = await deps.search(query)
+            sources = await deps.wikipedia(query)
             status = "found" if sources else "empty"
             if not sources:
                 notes = [*notes, f"Wikipedia returned no sources for: {query}"]
@@ -116,22 +123,27 @@ def build_graph(deps: ExpertDebateDeps):
         return {"sources": [*state["sources"], *sources], "research_notes": notes,
                 "queries": [*state["queries"], query]}
 
-    async def reply(state: DebateState, side: Side) -> dict:
+    async def dog_expert(state: DebateState) -> dict:
         emit = get_stream_writer()
-        emit({"type": "turn_start", "speaker": side})
-        text = await deps.reply(side, expert_input(state))
+        emit({"type": "turn_start", "speaker": "dogs"})
+        text = await deps.dog_expert(expert_input(state))
         if deps.director.stopped:
             return {}
-        speech = Speech(speaker=side, text=text)
+        speech = Speech(speaker="dogs", text=text)
         emit({"type": "turn_end", **speech.model_dump()})
         return {"transcript": [*state["transcript"], speech], "sources": [],
             "research_notes": [], "queries": [], "query": "", "preferred_expert": None}
 
-    async def dog_expert(state: DebateState) -> dict:
-        return await reply(state, "dogs")
-
     async def cat_expert(state: DebateState) -> dict:
-        return await reply(state, "cats")
+        emit = get_stream_writer()
+        emit({"type": "turn_start", "speaker": "cats"})
+        text = await deps.cat_expert(expert_input(state))
+        if deps.director.stopped:
+            return {}
+        speech = Speech(speaker="cats", text=text)
+        emit({"type": "turn_end", **speech.model_dump()})
+        return {"transcript": [*state["transcript"], speech], "sources": [],
+            "research_notes": [], "queries": [], "query": "", "preferred_expert": None}
 
     def after_human_control(state: DebateState) -> str:
         return END if deps.director.stopped else "brain_control"
